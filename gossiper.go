@@ -3,6 +3,7 @@ package main
 import (
     "flag"
     "fmt"
+    "log"
     "messages"
     "net"
     "strings"
@@ -12,10 +13,8 @@ import (
 var uiPort string
 var gossipAddr string
 var name string
-var peers []string
+var peers []string = nil
 var simple bool
-
-var err error
 
 func parseFlags() {
     flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
@@ -27,9 +26,7 @@ func parseFlags() {
 
     flag.Parse()
 
-    if peersString == "" {
-        peers = []string{}
-    } else {
+    if peersString != "" {
         peers = strings.Split(peersString, ",")
     }
 }
@@ -41,9 +38,15 @@ type Gossiper struct {
 }
 
 func NewGossiper(address, name string) *Gossiper {
-    // TODO use error for robustness
-    udpAddr, _ := net.ResolveUDPAddr("udp4", address)
-    udpConn, _ := net.ListenUDP("udp4", udpAddr)
+    // TODO add socket for communicating with client in Gossiper(?)
+    udpAddr, err := net.ResolveUDPAddr("udp4", address)
+    if err != nil {
+        log.Fatal(err)
+    }
+    udpConn, err := net.ListenUDP("udp4", udpAddr)
+    if err != nil {
+        log.Fatal(err)
+    }
     return &Gossiper{
         address: udpAddr,
         conn:    udpConn,
@@ -58,25 +61,29 @@ func (gossiper *Gossiper) listenGossipers() {
         if simple {
             fromPeer := packet.Simple.RelayPeerAddr
             fmt.Println("SIMPLE MESSAGE origin", packet.Simple.OriginalName,
-                        "from", fromPeer, "contents", packet.Simple.Contents)
-            if sendPacket(gossiper.conn, packet, fromPeer) {
-                peers = append(peers, fromPeer)
-            }
-            fmt.Println("PEERS", strings.Join(peers, ","))
+                        "from", packet.Simple.RealyPeerAddr,
+                        "contents", packet.Simple.Contents)
+            sendPacket(gossiper.conn, packet)
         }
     }
 }
 
 func listenClient() {
 
-    udpAddr, _ := net.ResolveUDPAddr("udp4", "127.0.0.1:" + uiPort)
-    udpConn, _ := net.ListenUDP("udp4", udpAddr)
+    udpAddr, err := net.ResolveUDPAddr("udp4", ":" + uiPort)
+    if err != nil {
+        log.Fatal(err)
+    }
+    udpConn, err := net.ListenUDP("udp4", udpAddr)
+    if err != nil {
+        log.Fatal(err)
+    }
     for {
         packet := getPacket(udpConn)
         if simple {
             packet.Simple.OriginalName = name
             fmt.Println("CLIENT MESSAGE", packet.Simple.Contents)
-            sendPacket(udpConn, packet, "")
+            sendPacket(udpConn, packet)
         }
     }
 }
@@ -84,27 +91,57 @@ func listenClient() {
 func getPacket(connection *net.UDPConn) *messages.GossipPacket {
     var packetBytes []byte = make([]byte, 1024) // TODO fix a sensible value
     var packet messages.GossipPacket
-    n, _, _ := connection.ReadFromUDP(packetBytes)
+
+    // Retrieve packet
+    // The address of the sender could be retrieved here (2nd argument)
+    n, _, err := connection.ReadFromUDP(packetBytes)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Decode packet
     err = protobuf.Decode(packetBytes[:n], &packet)
     if err != nil {
-        panic("Decode failed: "+err.Error())
+        log.Fatal(err)
     }
     return &packet
 }
 
-func sendPacket(connection *net.UDPConn, packet *messages.GossipPacket, fromPeer string) bool {
+func sendPacket(connection *net.UDPConn, packet *messages.GossipPacket) {
+    // Update packet with address and encode packet
+    fromPeer := packet.Simple.RelayPeerAddr
     packet.Simple.RelayPeerAddr = gossipAddr
-    packetBytes, _ := protobuf.Encode(packet)
+    packetBytes, err := protobuf.Encode(packet)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Send to all peers except the last sender
     fromPeerShallBeAdded := true
     for _, address := range peers {
         if (address != fromPeer) {
-            udpDest, _ := net.ResolveUDPAddr("udp4", address)
-            connection.WriteToUDP(packetBytes, udpDest)
+            udpDest, err := net.ResolveUDPAddr("udp4", address)
+            if err != nil {
+                log.Fatal(err)
+            }
+            bytes, err := connection.WriteToUDP(packetBytes, udpDest)
+            if err != nil {
+                log.Fatal(err)
+            }
+            if bytes != len(packetBytes) {
+                log.Fatal("%d bytes were sent instead of %d bytes.", bytes,
+                          len(packetBytes))
+            }
         } else {
             fromPeerShallBeAdded = false
         }
     }
-    return fromPeerShallBeAdded
+
+    // Add peer if not yet present, and display all known peers
+    if fromPeerShallBeAdded {
+        peers = append(peers, fromPeer)
+    }
+    fmt.Println("PEERS", strings.Join(peers, ","))
 }
 
 func main() {
