@@ -52,7 +52,7 @@ func NewGossiper(address, name string) *Gossiper {
 }
 
 
-func listenGossipers(gossiper *Gossiper) {
+func (gossiper *Gossiper) listenGossipers() {
     for {
         packet := getPacket(gossiper.conn)
         if simple {
@@ -113,5 +113,5 @@ func main() {
 
     go listenClient()
     gossiper := NewGossiper(gossipAddr, name)
-    listenGossipers(gossiper)
+    gossiper.listenGossipers()
 }
