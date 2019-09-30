@@ -42,12 +42,12 @@ func parseFlags() {
 type Gossiper struct {
 	address *net.UDPAddr
 	conn    *net.UDPConn
+	cliConn *net.UDPConn
 	Name    string
 }
 
 // NewGossiper creates a Gossiper with a given address and name.
 func NewGossiper(address, name string) *Gossiper {
-	// TODO add socket for communicating with client in Gossiper(?)
 	udpAddr, err := net.ResolveUDPAddr("udp4", address)
 	if err != nil {
 		log.Fatal(err)
@@ -56,41 +56,56 @@ func NewGossiper(address, name string) *Gossiper {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	cliAddr, err := net.ResolveUDPAddr("udp4", ":"+uiPort)
+	if err != nil {
+		log.Fatal(err)
+	}
+	cliConn, err := net.ListenUDP("udp4", cliAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return &Gossiper{
 		address: udpAddr,
 		conn:    udpConn,
+		cliConn: cliConn,
 		Name:    name,
 	}
 }
 
-func (gossiper *Gossiper) listenGossipers() {
+func (gossiper *Gossiper) listen(client bool) {
 	for {
-		packet := getPacket(gossiper.conn)
-		if simple {
-			fmt.Println("SIMPLE MESSAGE origin", packet.Simple.OriginalName,
-				"from", packet.Simple.RelayPeerAddr,
-				"contents", packet.Simple.Contents)
-			sendSimple(gossiper.conn, packet)
-		}
-	}
-}
-
-func listenClient() {
-
-	udpAddr, err := net.ResolveUDPAddr("udp4", ":"+uiPort)
-	if err != nil {
-		log.Fatal(err)
-	}
-	udpConn, err := net.ListenUDP("udp4", udpAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for {
-		packet := getPacket(udpConn)
-		if simple {
+		var packet *messages.GossipPacket
+		if client {
+			packet = getPacket(gossiper.cliConn)
 			packet.Simple.OriginalName = name
 			fmt.Println("CLIENT MESSAGE", packet.Simple.Contents)
-			sendSimple(udpConn, packet)
+		} else {
+			packet = getPacket(gossiper.conn)
+
+			// Add peer to list if it is unknown
+			senderAbsent := true
+			for _, peer := range peers {
+				if peer == packet.Simple.RelayPeerAddr {
+					senderAbsent = false
+				}
+			}
+			if senderAbsent {
+				peers = append(peers, packet.Simple.RelayPeerAddr)
+			}
+		}
+
+		if simple {
+			if !client {
+				fmt.Println("SIMPLE MESSAGE origin", packet.Simple.OriginalName,
+					"from", packet.Simple.RelayPeerAddr,
+					"contents", packet.Simple.Contents)
+
+			}
+
+			// Send packet to all other known peers
+			sendSimple(gossiper.conn, packet)
 		}
 	}
 }
@@ -111,11 +126,12 @@ func getPacket(connection *net.UDPConn) *messages.GossipPacket {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	return &packet
 }
 
 func sendSimple(connection *net.UDPConn, packet *messages.GossipPacket) {
-	// Update packet with address and encode packet
+	// Save previous address, update packet with address and encode it
 	fromPeer := packet.Simple.RelayPeerAddr
 	packet.Simple.RelayPeerAddr = gossipAddr
 	packetBytes, err := protobuf.Encode(packet)
@@ -124,19 +140,12 @@ func sendSimple(connection *net.UDPConn, packet *messages.GossipPacket) {
 	}
 
 	// Send to all peers except the last sender
-	fromPeerShallBeAdded := fromPeer != "" // should not add client
 	for _, address := range peers {
 		if address != fromPeer {
 			sendPacket(connection, address, packetBytes)
-		} else {
-			fromPeerShallBeAdded = false
 		}
 	}
 
-	// Add peer if not yet present, and display all known peers
-	if fromPeerShallBeAdded {
-		peers = append(peers, fromPeer)
-	}
 	fmt.Println("PEERS", strings.Join(peers, ","))
 }
 
@@ -159,7 +168,9 @@ func main() {
 
 	parseFlags()
 
-	go listenClient()
 	gossiper := NewGossiper(gossipAddr, name)
-	gossiper.listenGossipers()
+
+	// Listen to client and other gossipers
+	go gossiper.listen(true)
+	gossiper.listen(false)
 }
