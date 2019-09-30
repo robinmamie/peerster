@@ -124,7 +124,7 @@ func sendSimple(connection *net.UDPConn, packet *messages.GossipPacket) {
 	}
 
 	// Send to all peers except the last sender
-	fromPeerShallBeAdded := true
+	fromPeerShallBeAdded := fromPeer != "" // should not add client
 	for _, address := range peers {
 		if address != fromPeer {
 			sendPacket(connection, address, packetBytes)

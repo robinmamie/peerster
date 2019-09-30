@@ -19,7 +19,7 @@ func main() {
 	// Create and encode packet
 	simple := &messages.SimpleMessage{
 		OriginalName:  "Client",
-		RelayPeerAddr: "",
+		RelayPeerAddr: "", // convention: client does not add its address
 		Contents:      msg,
 	}
 	packet := messages.GossipPacket{Simple: simple}
