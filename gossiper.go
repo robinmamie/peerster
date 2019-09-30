@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"messages"
 	"net"
 	"strings"
@@ -17,26 +18,10 @@ var name string
 var peers []string = nil
 var simple bool
 
-var msgHistory map[messages.PeerStatus]string = make(map[messages.PeerStatus]string)
+// Map between an identifier and a list of RumorMessage
+var msgHistory map[messages.PeerStatus]*messages.RumorMessage = make(map[messages.PeerStatus]*messages.RumorMessage)
 var ownStatus messages.StatusPacket
-
-func parseFlags() {
-	flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
-	flag.StringVar(&gossipAddr, "gossipAddr", "127.0.0.1:5000",
-		"ip:port for the gossiper")
-	flag.StringVar(&name, "name", "", "name of the gossiper")
-	var peersString string
-	flag.StringVar(&peersString, "peers", "",
-		"comma separated list of peers of the form ip:port")
-	flag.BoolVar(&simple, "simple", false,
-		"run gossiper in simple broadcast mode")
-
-	flag.Parse()
-
-	if peersString != "" {
-		peers = strings.Split(peersString, ",")
-	}
-}
+var ownID uint32 = 0
 
 // Gossiper defines a peer and stores the necessary information to handle it.
 type Gossiper struct {
@@ -77,12 +62,15 @@ func NewGossiper(address, name string) *Gossiper {
 func (gossiper *Gossiper) listen(client bool) {
 	for {
 		var packet *messages.GossipPacket
+		var address *net.UDPAddr
 		if client {
-			packet = getPacket(gossiper.cliConn)
-			packet.Simple.OriginalName = name
+			packet, address = getPacket(gossiper.cliConn)
+			if simple {
+				packet.Simple.OriginalName = name
+			}
 			fmt.Println("CLIENT MESSAGE", packet.Simple.Contents)
 		} else {
-			packet = getPacket(gossiper.conn)
+			packet, _ = getPacket(gossiper.conn)
 
 			// Add peer to list if it is unknown
 			senderAbsent := true
@@ -96,27 +84,78 @@ func (gossiper *Gossiper) listen(client bool) {
 			}
 		}
 
+		// SIMPLE case
 		if simple {
 			if !client {
 				fmt.Println("SIMPLE MESSAGE origin", packet.Simple.OriginalName,
 					"from", packet.Simple.RelayPeerAddr,
 					"contents", packet.Simple.Contents)
-
 			}
 
 			// Send packet to all other known peers
 			sendSimple(gossiper.conn, packet)
+
+			// RUMORMONGERING PROTOCOL
+			// RUMOR case
+			// TODO should create new routine, because we need to wait for the answer,
+			// but the Gossiper should not block any other message from coming in
+		} else if packet.Rumor != nil {
+			// Set origin if rumor comes from client
+			if client {
+				packet.Rumor.Origin = name
+				packet.Rumor.ID = ownID
+				ownID++
+			} else {
+				fmt.Println("RUMOR origin", packet.Rumor.Origin, "from",
+					address, "ID", packet.Rumor.ID, "contents",
+					packet.Rumor.Text)
+			}
+
+			// TODO find a better solution. The last rumor should be
+			rumorStatus := messages.PeerStatus{
+				Identifier: packet.Rumor.Origin,
+				NextID:     packet.Rumor.ID,
+			}
+			_, present := msgHistory[rumorStatus]
+
+			// New rumor detected
+			if !present {
+				msgHistory[rumorStatus] = packet.Rumor
+				target := peers[rand.Int()%len(peers)]
+				sendGossipPacket(gossiper.conn, target, packet)
+				fmt.Println("MONGERING with", address)
+			}
+
+			// TODO Send status packet to sender
+
+			// STATUS case
+		} else if packet.Status != nil {
+			fmt.Print("STATUS from", address)
+			for _, s := range packet.Status.Want {
+				fmt.Print(" peer", s.Identifier, "nextID", s.NextID)
+			}
+			fmt.Println()
+
+			// TODO compare StatusPackets
+
+			// TODO handle case where we have more to send
+			// TODO handle case where they have more to send
+			// TODO handle case where everything is equal
 		}
+
+		// TODO send status packet back to previous sender
+
+		fmt.Println("PEERS", strings.Join(peers, ","))
 	}
 }
 
-func getPacket(connection *net.UDPConn) *messages.GossipPacket {
+func getPacket(connection *net.UDPConn) (*messages.GossipPacket, *net.UDPAddr) {
 	var packetBytes []byte = make([]byte, 1024) // TODO fix a sensible value
 	var packet messages.GossipPacket
 
 	// Retrieve packet
 	// The address of the sender could be retrieved here (2nd argument)
-	n, _, err := connection.ReadFromUDP(packetBytes)
+	n, address, err := connection.ReadFromUDP(packetBytes)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -127,7 +166,7 @@ func getPacket(connection *net.UDPConn) *messages.GossipPacket {
 		log.Fatal(err)
 	}
 
-	return &packet
+	return &packet, address
 }
 
 func sendSimple(connection *net.UDPConn, packet *messages.GossipPacket) {
@@ -145,8 +184,14 @@ func sendSimple(connection *net.UDPConn, packet *messages.GossipPacket) {
 			sendPacket(connection, address, packetBytes)
 		}
 	}
+}
 
-	fmt.Println("PEERS", strings.Join(peers, ","))
+func sendGossipPacket(connection *net.UDPConn, address string, packet *messages.GossipPacket) {
+	packetBytes, err := protobuf.Encode(packet)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sendPacket(connection, address, packetBytes)
 }
 
 func sendPacket(connection *net.UDPConn, address string, packetBytes []byte) {
@@ -166,7 +211,21 @@ func sendPacket(connection *net.UDPConn, address string, packetBytes []byte) {
 
 func main() {
 
-	parseFlags()
+	flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
+	flag.StringVar(&gossipAddr, "gossipAddr", "127.0.0.1:5000",
+		"ip:port for the gossiper")
+	flag.StringVar(&name, "name", "", "name of the gossiper")
+	var peersString string
+	flag.StringVar(&peersString, "peers", "",
+		"comma separated list of peers of the form ip:port")
+	flag.BoolVar(&simple, "simple", false,
+		"run gossiper in simple broadcast mode")
+
+	flag.Parse()
+
+	if peersString != "" {
+		peers = strings.Split(peersString, ",")
+	}
 
 	gossiper := NewGossiper(gossipAddr, name)
 
