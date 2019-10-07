@@ -7,7 +7,7 @@ cd ..
 
 RED='\033[0;31m'
 NC='\033[0m'
-DEBUG="true"
+DEBUG="false"
 
 outputFiles=()
 message=Weather_is_clear

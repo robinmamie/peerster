@@ -106,7 +106,7 @@ func (gossiper *Gossiper) listen() {
 		// Parse address accordingly
 		var addressTxt string
 		if simple {
-			if packet.Simple != nil {
+			if packet.Simple == nil {
 				log.Fatal("Got an unknown message while in simple mode!")
 			}
 			addressTxt = packet.Simple.RelayPeerAddr
@@ -396,9 +396,11 @@ func (gossiper *Gossiper) antiEntropy(ticker *time.Ticker) {
 	for {
 		select {
 		case <-ticker.C:
-			target := peers[rand.Int()%len(peers)]
-			packet := getCurrentStatus()
-			sendGossipPacket(gossiper.conn, target, &packet)
+			if len(peers) != 0 {
+				target := peers[rand.Int()%len(peers)]
+				packet := getCurrentStatus()
+				sendGossipPacket(gossiper.conn, target, &packet)
+			}
 		default:
 		}
 	}
