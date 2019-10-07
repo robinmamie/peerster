@@ -1,5 +1,10 @@
 package messages
 
+// Message is the packet sent by the client to the Gossiper
+type Message struct {
+	Text string
+}
+
 // GossipPacket is used to store different messages and
 // are sent between gossipers.
 type GossipPacket struct {
@@ -34,4 +39,20 @@ type PeerStatus struct {
 // StatusPacket stores all PeerStatus of a given peer.
 type StatusPacket struct {
 	Want []PeerStatus
+}
+
+// IsEqual verifies if a StatusPacket is equal to a locally implemented vector
+// clock.
+func (sp StatusPacket) IsEqual(thatMap map[string]uint32) bool {
+	this := sp.Want
+	if len(this) != len(thatMap) {
+		return false
+	}
+	for _, e := range this {
+		id, ok := thatMap[e.Identifier]
+		if !ok || id != e.NextID {
+			return false
+		}
+	}
+	return true
 }

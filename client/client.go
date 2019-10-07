@@ -11,19 +11,16 @@ import (
 
 func main() {
 	var uiPort string
-	var msg string
+	var textMsg string
 	flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
-	flag.StringVar(&msg, "msg", "", "message to be sent")
+	flag.StringVar(&textMsg, "msg", "", "message to be sent")
 	flag.Parse()
 
 	// Create and encode packet
-	simple := &messages.SimpleMessage{
-		OriginalName:  "Client",
-		RelayPeerAddr: "", // convention: client does not add its address
-		Contents:      msg,
+	msg := messages.Message{
+		Text: textMsg,
 	}
-	packet := messages.GossipPacket{Simple: simple}
-	packetBytes, err := protobuf.Encode(&packet)
+	packetBytes, err := protobuf.Encode(&msg)
 	if err != nil {
 		log.Fatal(err)
 	}
