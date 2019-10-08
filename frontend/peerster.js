@@ -2,10 +2,17 @@ $(document).ready(function() {
     update()
     timer = setInterval(update, 1000)
 
-    $("#sendMessage").click(function(){
+    $("#sendMessage").click(function() {
         const msg = $('#messageInput').val()
-        $.post("/post", {msg: msg})
+        $.post("/chat", {msg: msg}) // TODO should add listener to update after done?
         $('#messageInput').val('')
+        update()
+    })
+
+    $("#saveNode").click(function(){
+        const msg = $('#nodeInput').val()
+        $.post("/peers", {msg: msg}) // TODO should add listener to update after done?
+        $('#nodeInput').val('')
         update()
     })
 });

@@ -22,10 +22,8 @@ func InitWebServer(g *gossiper.Gossiper, uiPort string) {
 	gossip = g
 	http.Handle("/", http.FileServer(http.Dir("./frontend")))
 	http.HandleFunc("/id", getNodeID)
-	http.HandleFunc("/chat", getLatestRumorMessages)
-	http.HandleFunc("/peers", getKnownPeers)
-	http.HandleFunc("/post", sendMessage)
-	http.HandleFunc("/addpeer", addPeer)
+	http.HandleFunc("/chat", chatHandler)
+	http.HandleFunc("/peers", peerHandler)
 	localAddress = ":" + uiPort
 	for {
 		// Port number hard-coded
@@ -50,7 +48,7 @@ func getNodeID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getLatestRumorMessages(w http.ResponseWriter, r *http.Request) {
+func chatHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		msgList := gossiper.GetLatestRumorMessagesList()
@@ -68,10 +66,28 @@ func getLatestRumorMessages(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(msgListJSON)
+
+	case "POST":
+		if err := r.ParseForm(); err != nil {
+			log.Fatal(err)
+		}
+		conn, err := net.Dial("udp4", localAddress)
+		if err != nil {
+			log.Fatal(err)
+		}
+		packet := messages.Message{
+			Text: r.PostForm["msg"][0],
+		}
+		packetBytes, err := protobuf.Encode(&packet)
+		if err != nil {
+			log.Fatal(err)
+		}
+		conn.Write(packetBytes)
+		conn.Close()
 	}
 }
 
-func getKnownPeers(w http.ResponseWriter, r *http.Request) {
+func peerHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		peerList := gossip.Peers
@@ -82,49 +98,12 @@ func getKnownPeers(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(peerListJSON)
-	}
-}
 
-func sendMessage(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
 	case "POST":
 		if err := r.ParseForm(); err != nil {
 			log.Fatal(err)
 		}
-		conn, err := net.Dial("udp4", localAddress)
-		if err != nil {
-			log.Fatal(err)
-		}
-		packet := messages.Message{
-			Text: r.PostForm["msg"][0],
-		}
-		packetBytes, err := protobuf.Encode(&packet)
-		if err != nil {
-			log.Fatal(err)
-		}
-		conn.Write(packetBytes)
-		conn.Close()
-	}
-}
-
-func addPeer(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		if err := r.ParseForm(); err != nil {
-			log.Fatal(err)
-		}
-		conn, err := net.Dial("udp4", localAddress)
-		if err != nil {
-			log.Fatal(err)
-		}
-		packet := messages.Message{
-			Text: r.PostForm["msg"][0],
-		}
-		packetBytes, err := protobuf.Encode(&packet)
-		if err != nil {
-			log.Fatal(err)
-		}
-		conn.Write(packetBytes)
-		conn.Close()
+		newPeer := r.PostForm["msg"][0]
+		gossip.Peers = append(gossip.Peers, newPeer)
 	}
 }
