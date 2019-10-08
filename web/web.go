@@ -56,7 +56,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		// TODO put that in java script?
 		for _, r := range msgList {
 			msg := r.Origin + " (" + fmt.Sprint(r.ID) + "): " + r.Text
-			msg = "<p>" + msg + "</p>"
+			msg = "<p id=\"msg\">" + msg + "</p>"
 			messages = append(messages, msg)
 		}
 		msgListJSON, err := json.Marshal(messages)
@@ -91,19 +91,25 @@ func peerHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		peerList := gossip.Peers
-		peerListJSON, err := json.Marshal(peerList)
+		var peers []string = nil
+		for _, p := range peerList {
+			peer := "<p id=\"msg\">" + p + "</p>"
+			peers = append(peers, peer)
+		}
+		peersJSON, err := json.Marshal(peers)
 		if err != nil {
 			log.Fatal(err)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(peerListJSON)
+		w.Write(peersJSON)
 
 	case "POST":
 		if err := r.ParseForm(); err != nil {
 			log.Fatal(err)
 		}
-		newPeer := r.PostForm["msg"][0]
+		// TODO sanitize input?
+		newPeer := r.PostForm["node"][0]
 		gossip.Peers = append(gossip.Peers, newPeer)
 	}
 }

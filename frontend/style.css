@@ -1,3 +1,55 @@
-.title {
-    font-size: 16pt
+html {
+    font-family: arial
+}
+
+body {
+    height: 100%;
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.column {
+    float: left;
+}
+
+.main {
+    width: 70%;
+    margin-right: 5px;
+}
+
+.side {
+    width: 25%;
+    margin-left: 5px;
+}
+
+.content:after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.messages, .nodeList {
+    height: 400px;
+    overflow: scroll;
+    background-color: aliceblue;
+    border: 2px solid black;
+}
+
+#messageInput {
+    width: 80%;
+    margin-top: 10px;
+    margin-right: 10px;
+}
+
+#nodeInput {
+    width: 50%;
+    margin-top: 10px;
+    margin-right: 10px;
+}
+
+p#msg, p#node {
+    margin-left: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
 }

@@ -9,19 +9,28 @@
     </head>
     <body>
         <div id="peerster">
-            <h1>Peerster (<span class="nodeName"></span>)</h1>
+            <h1>Peerster</h1>
+            <h3>Local name: <span class="nodeName"></span></h3>
             
-            <div class="messages"></div>
+            <div class="content">
+                <div class="column main">
+                    <div class="messages"></div>
 
-            <input id="messageInput" type="text" size=100>
-            <button id="sendMessage">Send</button>
-            <br>
-            
-            <input id="nodeInput" type="text">
-            <button id="saveNode">Save node</button>
-            <br>
+                    <div class="messageHandling">
+                        <input id="messageInput" type="text">
+                        <button id="sendMessage">Send</button>
+                        <br>
+                    </div>
+                </div>
+                
+                <div class="column side">
+                    <div class="nodeList"></div>
 
-            <div class="nodeList"></div>
+                    <input id="nodeInput" type="text">
+                    <button id="saveNode">Save node</button>
+                    <br>
+                </div>
+            </div>
         </div>
     </body>
 </html>

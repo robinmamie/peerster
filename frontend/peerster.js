@@ -25,14 +25,20 @@ $(document).ready(function() {
 
 function sendMessage() {
     const msg = $('#messageInput').val()
+    if (msg === "") {
+        return
+    }
     $.post("/chat", {msg: msg}) // TODO should add listener to update after done?
     $('#messageInput').val('')
     update()
 }
 
 function saveNode() {
-    const msg = $('#nodeInput').val()
-    $.post("/peers", {msg: msg}) // TODO should add listener to update after done?
+    const node = $('#nodeInput').val()
+    if (node === "") {
+        return
+    }
+    $.post("/peers", {node: node}) // TODO should add listener to update after done?
     $('#nodeInput').val('')
     update()
 }
@@ -47,15 +53,16 @@ function update() {
             for (let el of messages) {
                 $(".messages").append(el)
             }
+            $(".messages").animate({
+                scrollTop: $('.messages').prop("scrollHeight")
+            }, 1000);
         }
     });
     $.get("/peers", function(peers){
         $(".nodeList").text("")
         if (peers !== null) {
             for (let el of peers) {
-                $(".nodeList").append("<p>")
                 $(".nodeList").append(el)
-                $(".nodeList").append("</p>")
             }
         }
     });   
