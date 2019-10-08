@@ -3,19 +3,39 @@ $(document).ready(function() {
     timer = setInterval(update, 1000)
 
     $("#sendMessage").click(function() {
-        const msg = $('#messageInput').val()
-        $.post("/chat", {msg: msg}) // TODO should add listener to update after done?
-        $('#messageInput').val('')
-        update()
+        sendMessage()
     })
 
+    $("#messageInput").keypress(function (e) {
+        if (e.which == '13') {
+            sendMessage()
+        }
+    });
+
     $("#saveNode").click(function(){
-        const msg = $('#nodeInput').val()
-        $.post("/peers", {msg: msg}) // TODO should add listener to update after done?
-        $('#nodeInput').val('')
-        update()
+        saveNode()
     })
+
+    $("#nodeInput").keypress(function (e) {
+        if (e.which == '13') {
+            saveNode()
+        }
+    });
 });
+
+function sendMessage() {
+    const msg = $('#messageInput').val()
+    $.post("/chat", {msg: msg}) // TODO should add listener to update after done?
+    $('#messageInput').val('')
+    update()
+}
+
+function saveNode() {
+    const msg = $('#nodeInput').val()
+    $.post("/peers", {msg: msg}) // TODO should add listener to update after done?
+    $('#nodeInput').val('')
+    update()
+}
 
 function update() {
     $.get("/id", function(id){
