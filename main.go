@@ -5,10 +5,12 @@ import (
 	"strings"
 
 	"github.com/robinmamie/Peerster/gossiper"
+	"github.com/robinmamie/Peerster/web"
 )
 
 func main() {
 
+	// Parse flags
 	var uiPort string
 	var gossipAddr string
 	var name string
@@ -34,8 +36,9 @@ func main() {
 
 	gossiper := gossiper.NewGossiper(gossipAddr, name, uiPort, simple, peers)
 
-	// Listen to client and other gossipers
-	go gossiper.AntiEntropy()
+	// Listen to client and other gossipers and activate anti-entropy
 	go gossiper.ListenClient()
+	go gossiper.AntiEntropy()
+	go web.InitWebServer(gossiper, uiPort)
 	gossiper.Listen()
 }

@@ -18,6 +18,7 @@ const UDPSize = 65507
 
 // Map between an identifier and a list of RumorMessage
 var msgHistory map[messages.PeerStatus]*messages.GossipPacket = make(map[messages.PeerStatus]*messages.GossipPacket)
+var latestMessages []*messages.RumorMessage = nil
 var nextIDs map[string]uint32 = make(map[string]uint32)
 var ownStatus messages.StatusPacket
 var ownID uint32 = 1
@@ -30,7 +31,7 @@ type Gossiper struct {
 	cliConn *net.UDPConn
 	Name    string
 	simple  bool
-	peers   []string
+	Peers   []string
 }
 
 // NewGossiper creates a Gossiper with a given address and name.
@@ -59,7 +60,7 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		cliConn: cliConn,
 		Name:    name,
 		simple:  simple,
-		peers:   peers,
+		Peers:   peers,
 	}
 }
 
@@ -90,7 +91,7 @@ func (gossiper *Gossiper) ListenClient() {
 			gossiper.receivedRumor(&packet)
 		}
 		// TODO !! per instruction should be here, but not according to example
-		fmt.Println("PEERS", strings.Join(gossiper.peers, ","))
+		fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
 	}
 }
 
@@ -107,6 +108,7 @@ func (gossiper *Gossiper) Listen() {
 		var addressTxt string
 		if gossiper.simple {
 			if packet.Simple == nil {
+				// TODO ! is that dangerous?
 				log.Fatal("Got an unknown message while in simple mode!")
 			}
 			addressTxt = packet.Simple.RelayPeerAddr
@@ -117,14 +119,14 @@ func (gossiper *Gossiper) Listen() {
 		// Add sender to known peers
 		// TODO should be function to return instead of breaking
 		senderAbsent := true
-		for _, peer := range gossiper.peers {
+		for _, peer := range gossiper.Peers {
 			if peer == addressTxt {
 				senderAbsent = false
 				break
 			}
 		}
 		if senderAbsent {
-			gossiper.peers = append(gossiper.peers, addressTxt)
+			gossiper.Peers = append(gossiper.Peers, addressTxt)
 		}
 
 		// SIMPLE case
@@ -179,7 +181,7 @@ func (gossiper *Gossiper) Listen() {
 }
 
 func (gossiper *Gossiper) printPeers() {
-	fmt.Println("PEERS", strings.Join(gossiper.peers, ","))
+	fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
 }
 
 func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) {
@@ -212,9 +214,10 @@ func (gossiper *Gossiper) rumormongerInit(packet *messages.GossipPacket) {
 	// New rumor detected
 	if !present {
 		msgHistory[rumorStatus] = packet
+		latestMessages = append(latestMessages, packet.Rumor)
 		// TODO code copy with AntiEntropy and rumormonger in status == nil
-		if len(gossiper.peers) != 0 {
-			target := gossiper.peers[rand.Int()%len(gossiper.peers)]
+		if len(gossiper.Peers) != 0 {
+			target := gossiper.Peers[rand.Int()%len(gossiper.Peers)]
 			gossiper.rumormonger(packet, target)
 		}
 	}
@@ -227,27 +230,20 @@ func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target stri
 	fmt.Println("MONGERING with", target)
 
 	go func() {
-		gotStatus := make(chan *messages.StatusPacket)
-		go func() {
-			timeout := time.NewTicker(10 * time.Second)
-			select {
-			case <-timeout.C:
-				gotStatus <- nil
-			case s := <-statusWaiting[target]:
-				gotStatus <- s
-			}
-		}()
+		timeout := time.NewTicker(10 * time.Second)
 		var status *messages.StatusPacket
 		select {
-		case status = <-gotStatus:
+		case <-timeout.C:
+			status = nil
+		case status = <-statusWaiting[target]:
 		}
 		if status == nil {
 			// TODO !! should be ANOTHER one?
-			target = gossiper.peers[rand.Int()%len(gossiper.peers)]
+			target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
 			gossiper.rumormonger(packet, target)
 		} else if gossiper.compareVectors(status, target) && rand.Int()%2 == 0 {
 			// TODO modularize this
-			target = gossiper.peers[rand.Int()%len(gossiper.peers)]
+			target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
 			fmt.Println("FLIPPED COIN sending rumor to", target)
 			gossiper.rumormonger(packet, target)
 
@@ -363,7 +359,7 @@ func (gossiper *Gossiper) sendSimple(packet *messages.GossipPacket) {
 	}
 
 	// Send to all peers except the last sender
-	for _, address := range gossiper.peers {
+	for _, address := range gossiper.Peers {
 		if address != fromPeer {
 			sendPacket(gossiper.conn, address, packetBytes)
 		}
@@ -399,12 +395,21 @@ func (gossiper *Gossiper) AntiEntropy() {
 	for {
 		select {
 		case <-ticker.C:
-			if len(gossiper.peers) != 0 {
-				target := gossiper.peers[rand.Int()%len(gossiper.peers)]
+			if len(gossiper.Peers) != 0 {
+				target := gossiper.Peers[rand.Int()%len(gossiper.Peers)]
 				packet := getCurrentStatus()
 				sendGossipPacket(gossiper.conn, target, &packet)
 			}
 		default:
 		}
 	}
+}
+
+// GetLatestRumorMessagesList return a list of the latest rumor messages.
+func GetLatestRumorMessagesList() []*messages.RumorMessage {
+	// TODO should delete or just keep a fixed size?
+	defer func() {
+		latestMessages = nil
+	}()
+	return latestMessages
 }
