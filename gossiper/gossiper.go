@@ -64,8 +64,19 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 	}
 }
 
+// Run starts the node and runs it.
+func (gossiper *Gossiper) Run() {
+	// Activate anti-entropy if necessary
+	if !gossiper.simple {
+		go gossiper.antiEntropy()
+	}
+
+	go gossiper.listenClient()
+	gossiper.listen()
+}
+
 // ListenClient handles the messages coming from the client.
-func (gossiper *Gossiper) ListenClient() {
+func (gossiper *Gossiper) listenClient() {
 	for {
 		textMsg := getMessage(gossiper.cliConn)
 		fmt.Println("CLIENT MESSAGE", textMsg)
@@ -100,7 +111,8 @@ func addressToString(address *net.UDPAddr) string {
 }
 
 // Listen handles all the messages coming from other gossipers.
-func (gossiper *Gossiper) Listen() {
+func (gossiper *Gossiper) listen() {
+
 	for {
 		packet, address := getPacket(gossiper.conn)
 
@@ -108,8 +120,8 @@ func (gossiper *Gossiper) Listen() {
 		var addressTxt string
 		if gossiper.simple {
 			if packet.Simple == nil {
-				// TODO ! is that dangerous?
-				log.Fatal("Got an unknown message while in simple mode!")
+				// Ignore any unexpected package
+				continue
 			}
 			addressTxt = packet.Simple.RelayPeerAddr
 		} else if !gossiper.simple {
@@ -148,6 +160,7 @@ func (gossiper *Gossiper) Listen() {
 			gossiper.printPeers()
 
 			gossiper.receivedRumor(packet)
+			// TODO !! should send statusPacket if already present?
 			gossiper.sendCurrentStatus(addressTxt)
 
 		} else if !gossiper.simple && packet.Status != nil {
@@ -390,7 +403,7 @@ func sendPacket(connection *net.UDPConn, address string, packetBytes []byte) {
 }
 
 // AntiEntropy fires every 10 seconds to send a StatusPacket to a random peer.
-func (gossiper *Gossiper) AntiEntropy() {
+func (gossiper *Gossiper) antiEntropy() {
 	ticker := time.NewTicker(10 * time.Second)
 	for {
 		select {

@@ -5,6 +5,8 @@ $(document).ready(function() {
     $("#sendMessage").click(function(){
         const msg = $('#messageInput').val()
         $.post("/post", {msg: msg})
+        $('#messageInput').val('')
+        update()
     })
 });
 

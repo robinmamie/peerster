@@ -27,7 +27,7 @@ func main() {
 	}
 
 	// Create local UDP connection
-	// TODO is there a better way than assigning a unique port?
+	// TODO !! is there a better way than assigning a unique port? ->net.Dial!
 	udpAddr, err := net.ResolveUDPAddr("udp4", ":4242")
 	if err != nil {
 		log.Fatal(err)

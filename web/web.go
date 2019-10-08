@@ -4,12 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 
+	"github.com/robinmamie/Peerster/messages"
+
 	"github.com/robinmamie/Peerster/gossiper"
+
+	"github.com/dedis/protobuf"
 )
 
 var gossip *gossiper.Gossiper
+var localAddress string
 
 // InitWebServer starts the web server.
 func InitWebServer(g *gossiper.Gossiper, uiPort string) {
@@ -19,9 +25,11 @@ func InitWebServer(g *gossiper.Gossiper, uiPort string) {
 	http.HandleFunc("/chat", getLatestRumorMessages)
 	http.HandleFunc("/peers", getKnownPeers)
 	http.HandleFunc("/post", sendMessage)
+	http.HandleFunc("/addpeer", addPeer)
+	localAddress = ":" + uiPort
 	for {
 		// Port number hard-coded
-		err := http.ListenAndServe(":"+uiPort, nil)
+		err := http.ListenAndServe(localAddress, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -80,6 +88,43 @@ func getKnownPeers(w http.ResponseWriter, r *http.Request) {
 func sendMessage(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
-		// TODO get data and send new message
+		if err := r.ParseForm(); err != nil {
+			log.Fatal(err)
+		}
+		conn, err := net.Dial("udp4", localAddress)
+		if err != nil {
+			log.Fatal(err)
+		}
+		packet := messages.Message{
+			Text: r.PostForm["msg"][0],
+		}
+		packetBytes, err := protobuf.Encode(&packet)
+		if err != nil {
+			log.Fatal(err)
+		}
+		conn.Write(packetBytes)
+		conn.Close()
+	}
+}
+
+func addPeer(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		if err := r.ParseForm(); err != nil {
+			log.Fatal(err)
+		}
+		conn, err := net.Dial("udp4", localAddress)
+		if err != nil {
+			log.Fatal(err)
+		}
+		packet := messages.Message{
+			Text: r.PostForm["msg"][0],
+		}
+		packetBytes, err := protobuf.Encode(&packet)
+		if err != nil {
+			log.Fatal(err)
+		}
+		conn.Write(packetBytes)
+		conn.Close()
 	}
 }
