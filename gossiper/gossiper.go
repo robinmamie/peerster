@@ -23,7 +23,6 @@ var nextIDs map[string]uint32 = make(map[string]uint32)
 var ownStatus messages.StatusPacket
 var ownID uint32 = 1
 
-// TODO !! StatusPacket instead of string, to handle different rumors to same node
 var statusWaiting map[string](chan *messages.StatusPacket) = make(map[string](chan *messages.StatusPacket))
 var expected map[string]chan bool = make(map[string]chan bool)
 
@@ -92,16 +91,16 @@ func (gossiper *Gossiper) listenClient() {
 		fmt.Println("CLIENT MESSAGE", textMsg)
 
 		if gossiper.simple {
-			packet := messages.GossipPacket{
+			packet := &messages.GossipPacket{
 				Simple: &messages.SimpleMessage{
 					OriginalName:  gossiper.Name,
 					RelayPeerAddr: addressToString(gossiper.address),
 					Contents:      textMsg,
 				},
 			}
-			gossiper.sendSimple(&packet)
+			gossiper.sendSimple(packet)
 		} else {
-			packet := messages.GossipPacket{
+			packet := &messages.GossipPacket{
 				Rumor: &messages.RumorMessage{
 					Origin: gossiper.Name,
 					ID:     ownID,
@@ -109,10 +108,8 @@ func (gossiper *Gossiper) listenClient() {
 				},
 			}
 			ownID++
-			gossiper.receivedRumor(&packet)
+			gossiper.receivedRumor(packet)
 		}
-		// TODO !! per instruction should be here, but not according to example
-		fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
 	}
 }
 
@@ -173,9 +170,9 @@ func (gossiper *Gossiper) listen() {
 				packet.Rumor.Text)
 			gossiper.printPeers()
 
-			gossiper.receivedRumor(packet)
-			// TODO !! should send statusPacket if already present?
-			gossiper.sendCurrentStatus(addressTxt)
+			if !gossiper.receivedRumor(packet) {
+				gossiper.sendCurrentStatus(addressTxt)
+			}
 
 		} else if !gossiper.simple && packet.Status != nil {
 			fmt.Print("STATUS from ", address)
@@ -228,7 +225,7 @@ func (gossiper *Gossiper) printPeers() {
 	fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
 }
 
-func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) {
+func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) bool {
 
 	// Update vector clock
 	val, ok := nextIDs[packet.Rumor.Origin]
@@ -245,10 +242,10 @@ func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) {
 		}
 	}
 
-	gossiper.rumormongerInit(packet)
+	return gossiper.rumormongerInit(packet)
 }
 
-func (gossiper *Gossiper) rumormongerInit(packet *messages.GossipPacket) {
+func (gossiper *Gossiper) rumormongerInit(packet *messages.GossipPacket) bool {
 	rumorStatus := messages.PeerStatus{
 		Identifier: packet.Rumor.Origin,
 		NextID:     packet.Rumor.ID,
@@ -262,9 +259,11 @@ func (gossiper *Gossiper) rumormongerInit(packet *messages.GossipPacket) {
 		// TODO code copy with AntiEntropy and rumormonger in status == nil
 		if len(gossiper.Peers) != 0 {
 			target := gossiper.Peers[rand.Int()%len(gossiper.Peers)]
-			gossiper.rumormonger(packet, target)
+			go gossiper.rumormonger(packet, target)
 		}
 	}
+
+	return present
 }
 
 func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target string) {
@@ -272,33 +271,31 @@ func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target stri
 	sendGossipPacket(gossiper.conn, target, packet)
 	fmt.Println("MONGERING with", target)
 
-	go func() {
-		// Set timeout and listen to acknowledgement channel
-		timeout := time.NewTicker(10 * time.Second)
+	// Set timeout and listen to acknowledgement channel
+	timeout := time.NewTicker(10 * time.Second)
 
-		for {
-			select {
-			case <-timeout.C:
-				target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
-				defer gossiper.rumormonger(packet, target)
-				return
+	for {
+		select {
+		case <-timeout.C:
+			target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
+			defer gossiper.rumormonger(packet, target)
+			return
 
-			case status := <-statusWaiting[target]:
-				for _, sp := range status.Want {
-					if sp.Identifier == packet.Rumor.Origin && sp.NextID > packet.Rumor.ID {
-						expected[target] <- false
-						if gossiper.compareVectors(status, target) && rand.Int()%2 == 0 {
-							// TODO modularize this
-							target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
-							fmt.Println("FLIPPED COIN sending rumor to", target)
-							defer gossiper.rumormonger(packet, target)
-						}
-						return
+		case status := <-statusWaiting[target]:
+			for _, sp := range status.Want {
+				if sp.Identifier == packet.Rumor.Origin && sp.NextID > packet.Rumor.ID {
+					expected[target] <- false
+					if gossiper.compareVectors(status, target) && rand.Int()%2 == 0 {
+						// TODO modularize this
+						target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
+						fmt.Println("FLIPPED COIN sending rumor to", target)
+						defer gossiper.rumormonger(packet, target)
 					}
+					return
 				}
 			}
 		}
-	}()
+	}
 
 }
 
