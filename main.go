@@ -16,6 +16,7 @@ func main() {
 	var name string
 	var peers []string = nil
 	var simple bool
+	var antiEntropy uint64
 
 	var peersString string
 
@@ -27,6 +28,8 @@ func main() {
 		"comma separated list of peers of the form ip:port")
 	flag.BoolVar(&simple, "simple", false,
 		"run gossiper in simple broadcast mode")
+	flag.Uint64Var(&antiEntropy, "antiEntropy", 10,
+		"use the given timeout in seconds for anti-entropy")
 
 	flag.Parse()
 
@@ -37,5 +40,5 @@ func main() {
 	gossiper := gossiper.NewGossiper(gossipAddr, name, uiPort, simple, peers)
 
 	go web.InitWebServer(gossiper, uiPort)
-	gossiper.Run()
+	gossiper.Run(antiEntropy)
 }

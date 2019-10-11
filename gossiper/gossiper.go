@@ -22,6 +22,8 @@ var latestMessages []*messages.RumorMessage = nil
 var nextIDs map[string]uint32 = make(map[string]uint32)
 var ownStatus messages.StatusPacket
 var ownID uint32 = 1
+
+// TODO !! StatusPacket instead of string, to handle different rumors to same node
 var statusWaiting map[string](chan *messages.StatusPacket) = make(map[string](chan *messages.StatusPacket))
 
 // Gossiper defines a peer and stores the necessary information to handle it.
@@ -65,10 +67,10 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 }
 
 // Run starts the node and runs it.
-func (gossiper *Gossiper) Run() {
+func (gossiper *Gossiper) Run(antiEntropy uint64) {
 	// Activate anti-entropy if necessary
 	if !gossiper.simple {
-		go gossiper.antiEntropy()
+		go gossiper.antiEntropy(antiEntropy)
 	}
 
 	go gossiper.listenClient()
@@ -173,8 +175,11 @@ func (gossiper *Gossiper) listen() {
 
 			// Wake up subroutine if status received
 			unexpected := true
+			// TODO !! check also NextID, not store only string as key
 			for target, channel := range statusWaiting {
 				if target == addressTxt {
+					// TODO !! send to all waiting routines, incl. lower nextIDs
+					// https://moodle.epfl.ch/mod/forum/discuss.php?d=20301#p40295
 					channel <- packet.Status
 					delete(statusWaiting, target)
 					unexpected = false
@@ -238,18 +243,23 @@ func (gossiper *Gossiper) rumormongerInit(packet *messages.GossipPacket) {
 
 func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target string) {
 
-	statusWaiting[target] = make(chan *messages.StatusPacket)
+	channel := make(chan *messages.StatusPacket)
+	statusWaiting[target] = channel
 	sendGossipPacket(gossiper.conn, target, packet)
 	fmt.Println("MONGERING with", target)
 
+	// TODO ! should put this go routine elsewhere?
 	go func() {
 		timeout := time.NewTicker(10 * time.Second)
 		var status *messages.StatusPacket
 		select {
 		case <-timeout.C:
 			status = nil
+			// TODO !! delete channel from map before closing it
 		case status = <-statusWaiting[target]:
 		}
+		// TODO Close the channel (after death of thread?)
+		close(channel)
 		if status == nil {
 			// TODO !! should be ANOTHER one?
 			target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
@@ -278,6 +288,7 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 	// 1. Send everything we know
 	for _, ourE := range ourStatus {
 		// TODO modularize for both sides of the equation (1 & 2)
+		// TODO !! should return after each new rumormonger!! defer all executions
 		theirID, ok := theirMap[ourE.Identifier]
 		if !ok {
 			gossiper.rumormongerPastMsg(ourE.Identifier, 1, target)
@@ -403,11 +414,12 @@ func sendPacket(connection *net.UDPConn, address string, packetBytes []byte) {
 }
 
 // AntiEntropy fires every 10 seconds to send a StatusPacket to a random peer.
-func (gossiper *Gossiper) antiEntropy() {
-	ticker := time.NewTicker(10 * time.Second)
+func (gossiper *Gossiper) antiEntropy(delay uint64) {
+	ticker := time.NewTicker(time.Duration(delay) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
+			// TODO ! example to modularize
 			if len(gossiper.Peers) != 0 {
 				target := gossiper.Peers[rand.Int()%len(gossiper.Peers)]
 				packet := getCurrentStatus()

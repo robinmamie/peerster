@@ -27,23 +27,14 @@ func main() {
 	}
 
 	// Create local UDP connection
-	// TODO !! is there a better way than assigning a unique port? ->net.Dial!
-	udpAddr, err := net.ResolveUDPAddr("udp4", ":4242")
+	conn, err := net.Dial("udp4", ":"+uiPort)
 	if err != nil {
 		log.Fatal(err)
 	}
-	udpConn, _ := net.ListenUDP("udp4", udpAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer udpConn.Close()
 
-	// Resolve recipient address and send packet
-	udpDest, err := net.ResolveUDPAddr("udp4", ":"+uiPort)
-	if err != nil {
-		log.Fatal(err)
-	}
-	bytes, err := udpConn.WriteToUDP(packetBytes, udpDest)
+	// Send packet and close connection
+	bytes, err := conn.Write(packetBytes)
+	// TODO !! modularize error handling
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,4 +42,9 @@ func main() {
 		log.Fatal(bytes, "bytes were sent instead of", len(packetBytes),
 			"bytes.")
 	}
+	err = conn.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
