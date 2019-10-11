@@ -25,6 +25,7 @@ var ownID uint32 = 1
 
 // TODO !! StatusPacket instead of string, to handle different rumors to same node
 var statusWaiting map[string](chan *messages.StatusPacket) = make(map[string](chan *messages.StatusPacket))
+var expected map[string]chan bool = make(map[string]chan bool)
 
 // Gossiper defines a peer and stores the necessary information to handle it.
 type Gossiper struct {
@@ -54,6 +55,13 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 	cliConn, err := net.ListenUDP("udp4", cliAddr)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	for _, p := range peers {
+		channel := make(chan *messages.StatusPacket)
+		statusWaiting[p] = channel
+		expChannel := make(chan bool)
+		expected[p] = expChannel
 	}
 
 	return &Gossiper{
@@ -141,6 +149,10 @@ func (gossiper *Gossiper) listen() {
 		}
 		if senderAbsent {
 			gossiper.Peers = append(gossiper.Peers, addressTxt)
+			channel := make(chan *messages.StatusPacket)
+			statusWaiting[addressTxt] = channel
+			expChannel := make(chan bool)
+			expected[addressTxt] = expChannel
 		}
 
 		// SIMPLE case
@@ -173,23 +185,37 @@ func (gossiper *Gossiper) listen() {
 			fmt.Println()
 			gossiper.printPeers()
 
-			// Wake up subroutine if status received
-			unexpected := true
-			// TODO !! check also NextID, not store only string as key
+			// Wake up correctsubroutine if status received
+			unexpected := false
 			for target, channel := range statusWaiting {
+
 				if target == addressTxt {
-					// TODO !! send to all waiting routines, incl. lower nextIDs
-					// https://moodle.epfl.ch/mod/forum/discuss.php?d=20301#p40295
-					channel <- packet.Status
-					delete(statusWaiting, target)
-					unexpected = false
+					// Empty expected channel before
+					for len(expected[target]) > 0 {
+						<-expected[target]
+					}
+
+					// Send packet to correct channel
+					select {
+					case channel <- packet.Status:
+						timeout := time.NewTicker(10 * time.Millisecond)
+						select {
+						case <-expected[target]:
+						case <-timeout.C:
+							unexpected = true
+						default:
+							unexpected = true
+						}
+					default:
+						unexpected = true
+					}
 				}
 			}
-
 			// If unexpected Status, then compare vectors
 			if unexpected {
 				gossiper.compareVectors(packet.Status, addressTxt)
 			}
+
 		}
 
 		if packet.Rumor == nil && packet.Simple == nil && packet.Status == nil {
@@ -243,33 +269,34 @@ func (gossiper *Gossiper) rumormongerInit(packet *messages.GossipPacket) {
 
 func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target string) {
 
-	channel := make(chan *messages.StatusPacket)
-	statusWaiting[target] = channel
 	sendGossipPacket(gossiper.conn, target, packet)
 	fmt.Println("MONGERING with", target)
 
-	// TODO ! should put this go routine elsewhere?
 	go func() {
+		// Set timeout and listen to acknowledgement channel
 		timeout := time.NewTicker(10 * time.Second)
-		var status *messages.StatusPacket
-		select {
-		case <-timeout.C:
-			status = nil
-			// TODO !! delete channel from map before closing it
-		case status = <-statusWaiting[target]:
-		}
-		// TODO Close the channel (after death of thread?)
-		close(channel)
-		if status == nil {
-			// TODO !! should be ANOTHER one?
-			target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
-			gossiper.rumormonger(packet, target)
-		} else if gossiper.compareVectors(status, target) && rand.Int()%2 == 0 {
-			// TODO modularize this
-			target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
-			fmt.Println("FLIPPED COIN sending rumor to", target)
-			gossiper.rumormonger(packet, target)
 
+		for {
+			select {
+			case <-timeout.C:
+				target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
+				defer gossiper.rumormonger(packet, target)
+				return
+
+			case status := <-statusWaiting[target]:
+				for _, sp := range status.Want {
+					if sp.Identifier == packet.Rumor.Origin && sp.NextID > packet.Rumor.ID {
+						expected[target] <- false
+						if gossiper.compareVectors(status, target) && rand.Int()%2 == 0 {
+							// TODO modularize this
+							target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
+							fmt.Println("FLIPPED COIN sending rumor to", target)
+							defer gossiper.rumormonger(packet, target)
+						}
+						return
+					}
+				}
+			}
 		}
 	}()
 
@@ -291,18 +318,22 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 		// TODO !! should return after each new rumormonger!! defer all executions
 		theirID, ok := theirMap[ourE.Identifier]
 		if !ok {
-			gossiper.rumormongerPastMsg(ourE.Identifier, 1, target)
+			defer gossiper.rumormongerPastMsg(ourE.Identifier, 1, target)
+			return false
 		} else if theirID < ourE.NextID {
-			gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target)
+			defer gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target)
+			return false
 		}
 	}
 	// 2. Verify if they know something new
 	for _, theirE := range status.Want {
 		ourID, ok := nextIDs[theirE.Identifier]
 		if !ok || ourID < theirE.NextID {
-			gossiper.sendCurrentStatus(target)
+			defer gossiper.sendCurrentStatus(target)
+			return false
 		}
 	}
+	log.Fatal("Undefined behavior in vector comparison")
 	return false
 }
 
