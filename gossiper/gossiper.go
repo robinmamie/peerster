@@ -16,6 +16,7 @@ import (
 // UDPSize is the maximum number of bytes sent by a UDP message
 const UDPSize = 65507
 
+// TODO put all variables INSIDE gossiper
 // Map between an identifier and a list of RumorMessage
 var msgHistory map[messages.PeerStatus]*messages.GossipPacket = make(map[messages.PeerStatus]*messages.GossipPacket)
 var latestMessages []*messages.RumorMessage = nil
@@ -136,15 +137,7 @@ func (gossiper *Gossiper) listen() {
 		}
 
 		// Add sender to known peers
-		// TODO should be function to return instead of breaking
-		senderAbsent := true
-		for _, peer := range gossiper.Peers {
-			if peer == addressTxt {
-				senderAbsent = false
-				break
-			}
-		}
-		if senderAbsent {
+		if gossiper.isSenderAbsent(addressTxt) {
 			gossiper.Peers = append(gossiper.Peers, addressTxt)
 			channel := make(chan *messages.StatusPacket)
 			statusWaiting[addressTxt] = channel
@@ -221,6 +214,15 @@ func (gossiper *Gossiper) listen() {
 	}
 }
 
+func (gossiper *Gossiper) isSenderAbsent(address string) bool {
+	for _, peer := range gossiper.Peers {
+		if peer == address {
+			return false
+		}
+	}
+	return true
+}
+
 func (gossiper *Gossiper) printPeers() {
 	fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
 }
@@ -284,7 +286,8 @@ func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target stri
 		case status := <-statusWaiting[target]:
 			for _, sp := range status.Want {
 				if sp.Identifier == packet.Rumor.Origin && sp.NextID > packet.Rumor.ID {
-					expected[target] <- false
+					// Announce that the package is expected
+					expected[target] <- true
 					if gossiper.compareVectors(status, target) && rand.Int()%2 == 0 {
 						// TODO modularize this
 						target = gossiper.Peers[rand.Int()%len(gossiper.Peers)]
@@ -312,13 +315,13 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 	// 1. Send everything we know
 	for _, ourE := range ourStatus {
 		// TODO modularize for both sides of the equation (1 & 2)
-		// TODO !! should return after each new rumormonger!! defer all executions
 		theirID, ok := theirMap[ourE.Identifier]
 		if !ok {
-			defer gossiper.rumormongerPastMsg(ourE.Identifier, 1, target)
+			gossiper.rumormongerPastMsg(ourE.Identifier, 1, target)
 			return false
-		} else if theirID < ourE.NextID {
-			defer gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target)
+		}
+		if theirID < ourE.NextID {
+			gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target)
 			return false
 		}
 	}
@@ -326,7 +329,7 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 	for _, theirE := range status.Want {
 		ourID, ok := nextIDs[theirE.Identifier]
 		if !ok || ourID < theirE.NextID {
-			defer gossiper.sendCurrentStatus(target)
+			gossiper.sendCurrentStatus(target)
 			return false
 		}
 	}
@@ -339,16 +342,16 @@ func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target st
 		Identifier: origin,
 		NextID:     id,
 	}
-	gossiper.rumormonger(msgHistory[ps], target)
+	go gossiper.rumormonger(msgHistory[ps], target)
 }
 
 func (gossiper *Gossiper) sendCurrentStatus(address string) {
 	packet := getCurrentStatus()
-	sendGossipPacket(gossiper.conn, address, &packet)
+	sendGossipPacket(gossiper.conn, address, packet)
 }
 
 // TODO should return a pointer
-func getCurrentStatus() messages.GossipPacket {
+func getCurrentStatus() *messages.GossipPacket {
 	packet := messages.GossipPacket{
 		Status: &messages.StatusPacket{
 			Want: nil,
@@ -360,7 +363,7 @@ func getCurrentStatus() messages.GossipPacket {
 			NextID:     v,
 		})
 	}
-	return packet
+	return &packet
 }
 
 func getMessage(connection *net.UDPConn) string {
@@ -450,16 +453,15 @@ func (gossiper *Gossiper) antiEntropy(delay uint64) {
 			// TODO ! example to modularize
 			if len(gossiper.Peers) != 0 {
 				target := gossiper.Peers[rand.Int()%len(gossiper.Peers)]
-				packet := getCurrentStatus()
-				sendGossipPacket(gossiper.conn, target, &packet)
+				gossiper.sendCurrentStatus(target)
 			}
 		default:
 		}
 	}
 }
 
-// GetLatestRumorMessagesList return a list of the latest rumor messages.
-func GetLatestRumorMessagesList() []*messages.RumorMessage {
+// GetLatestRumorMessagesList returns a list of the latest rumor messages.
+func (gossiper *Gossiper) GetLatestRumorMessagesList() []*messages.RumorMessage {
 	// TODO should delete or just keep a fixed size?
 	defer func() {
 		latestMessages = nil

@@ -51,7 +51,7 @@ func getNodeID(w http.ResponseWriter, r *http.Request) {
 func chatHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		msgList := gossiper.GetLatestRumorMessagesList()
+		msgList := gossip.GetLatestRumorMessagesList()
 		var messages []string = nil
 		// TODO put that in java script?
 		for _, r := range msgList {
