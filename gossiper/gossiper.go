@@ -109,7 +109,7 @@ func (gossiper *Gossiper) listenClient() {
 				},
 			}
 			ownID++
-			gossiper.receivedRumor(packet)
+			gossiper.receivedNewRumor(packet)
 		}
 	}
 }
@@ -163,9 +163,8 @@ func (gossiper *Gossiper) listen() {
 				packet.Rumor.Text)
 			gossiper.printPeers()
 
-			if !gossiper.receivedRumor(packet) {
-				gossiper.sendCurrentStatus(addressTxt)
-			}
+			gossiper.receivedNewRumor(packet)
+			gossiper.sendCurrentStatus(addressTxt)
 
 		} else if !gossiper.simple && packet.Status != nil {
 			fmt.Print("STATUS from ", address)
@@ -227,32 +226,37 @@ func (gossiper *Gossiper) printPeers() {
 	fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
 }
 
-func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) bool {
+// receivedRumor returns true if the given rumor is not present.
+func (gossiper *Gossiper) receivedNewRumor(packet *messages.GossipPacket) {
+
+	rumorStatus := messages.PeerStatus{
+		Identifier: packet.Rumor.Origin,
+		NextID:     packet.Rumor.ID,
+	}
+	_, present := msgHistory[rumorStatus]
 
 	// Update vector clock
 	val, ok := nextIDs[packet.Rumor.Origin]
 	if ok {
 		if val == packet.Rumor.ID {
-			// TODO ! what happens if we get message 3 but we have 1, 2 and 4?
-			nextIDs[packet.Rumor.Origin] = val + 1
+			stillPresent := present
+			status := rumorStatus
+			// Verify if a sequence was completed
+			for stillPresent {
+				status.NextID++
+				nextIDs[packet.Rumor.Origin]++
+				_, stillPresent = msgHistory[status]
+			}
 		}
+		// else do not update vector clock, will be done once the sequence is completed
 	} else {
+		// It's a new message, initialize the vector clock accordingly.
 		if packet.Rumor.ID == 1 {
 			nextIDs[packet.Rumor.Origin] = 2
 		} else {
 			nextIDs[packet.Rumor.Origin] = 1
 		}
 	}
-
-	return gossiper.rumormongerInit(packet)
-}
-
-func (gossiper *Gossiper) rumormongerInit(packet *messages.GossipPacket) bool {
-	rumorStatus := messages.PeerStatus{
-		Identifier: packet.Rumor.Origin,
-		NextID:     packet.Rumor.ID,
-	}
-	_, present := msgHistory[rumorStatus]
 
 	// New rumor detected
 	if !present {
@@ -264,8 +268,6 @@ func (gossiper *Gossiper) rumormongerInit(packet *messages.GossipPacket) bool {
 			go gossiper.rumormonger(packet, target)
 		}
 	}
-
-	return present
 }
 
 func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target string) {
