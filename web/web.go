@@ -51,7 +51,6 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		msgList := gossip.GetLatestRumorMessagesList()
 		var messages []string = nil
-		// TODO put that in java script?
 		for _, r := range msgList {
 			msg := r.Origin + " (" + fmt.Sprint(r.ID) + "): " + r.Text
 			msg = "<p id=\"msg\">" + msg + "</p>"
@@ -119,7 +118,6 @@ func peerHandler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		err := r.ParseForm()
 		tools.Check(err)
-		// TODO sanitize input?
 		newPeer := r.PostForm["node"][0]
 		gossip.Peers = append(gossip.Peers, newPeer)
 	}

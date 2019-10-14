@@ -174,7 +174,7 @@ func (gossiper *Gossiper) listen() {
 			gossiper.printPeers()
 
 			// Wake up correctsubroutine if status received
-			unexpected := false
+			unexpected := true
 			for target, channel := range gossiper.statusWaiting {
 
 				if target == addressTxt {
@@ -183,19 +183,21 @@ func (gossiper *Gossiper) listen() {
 						<-gossiper.expected[target]
 					}
 
-					// Send packet to correct channel
-					select {
-					case channel <- packet.Status:
-						timeout := time.NewTicker(10 * time.Millisecond)
+					// Send packet to correct channel, as many times as possible
+					listening := true
+					for listening {
 						select {
-						case <-gossiper.expected[target]:
-						case <-timeout.C:
-							unexpected = true
+						case channel <- packet.Status:
+							timeout := time.NewTicker(10 * time.Millisecond)
+							select {
+							case <-gossiper.expected[target]:
+								unexpected = false
+							case <-timeout.C:
+								listening = false
+							}
 						default:
-							unexpected = true
+							listening = false
 						}
-					default:
-						unexpected = true
 					}
 				}
 			}

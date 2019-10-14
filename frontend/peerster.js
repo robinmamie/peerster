@@ -29,7 +29,7 @@ function sendMessage() {
     if (msg === "") {
         return
     }
-    $.post("/chat", {msg: msg}) // TODO should add listener to update after done?
+    $.post("/chat", {msg: msg})
     $('#messageInput').val('')
     update()
 }
@@ -39,7 +39,7 @@ function saveNode() {
     if (node === "") {
         return
     }
-    $.post("/peers", {node: node}) // TODO should add listener to update after done?
+    $.post("/peers", {node: node})
     $('#nodeInput').val('')
     update()
 }
