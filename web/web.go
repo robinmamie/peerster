@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/robinmamie/Peerster/messages"
 	"github.com/robinmamie/Peerster/tools"
@@ -36,7 +37,7 @@ func InitWebServer(g *gossiper.Gossiper, uiPort string) {
 func getNodeID(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		nodeNameList := []string{gossip.Name}
+		nodeNameList := []string{gossip.Name, gossip.Address, gossip.UIPort}
 		nodeNameListJSON, err := json.Marshal(nodeNameList)
 		tools.Check(err)
 
@@ -46,16 +47,22 @@ func getNodeID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func parseRumorList(msgList []*messages.RumorMessage) []string {
+	var messages []string = nil
+	for _, r := range msgList {
+		r.Text = strings.ReplaceAll(r.Text, "<", "&lt;")
+		msg := r.Origin + " (" + fmt.Sprint(r.ID) + "): <code>" + r.Text + "</code>"
+		msg = "<p id=\"msg\">" + msg + "</p>"
+		messages = append(messages, msg)
+	}
+	return messages
+}
+
 func chatHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		msgList := gossip.GetLatestRumorMessagesList()
-		var messages []string = nil
-		for _, r := range msgList {
-			msg := r.Origin + " (" + fmt.Sprint(r.ID) + "): " + r.Text
-			msg = "<p id=\"msg\">" + msg + "</p>"
-			messages = append(messages, msg)
-		}
+		messages := parseRumorList(msgList)
 		msgListJSON, err := json.Marshal(messages)
 		tools.Check(err)
 
@@ -84,12 +91,7 @@ func fullChatHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		msgList := gossip.GetRumorMessagesList()
-		var messages []string = nil
-		for _, r := range msgList {
-			msg := r.Origin + " (" + fmt.Sprint(r.ID) + "): " + r.Text
-			msg = "<p id=\"msg\">" + msg + "</p>"
-			messages = append(messages, msg)
-		}
+		messages := parseRumorList(msgList)
 		msgListJSON, err := json.Marshal(messages)
 		tools.Check(err)
 

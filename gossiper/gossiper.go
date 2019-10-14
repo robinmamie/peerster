@@ -16,9 +16,10 @@ import (
 
 // Gossiper defines a peer and stores the necessary information to use it.
 type Gossiper struct {
-	address         string
+	Address         string
 	conn            *net.UDPConn
 	cliConn         *net.UDPConn
+	UIPort          string
 	Name            string
 	simple          bool
 	Peers           []string
@@ -61,9 +62,10 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 	nextIDs := make(map[string]uint32)
 
 	return &Gossiper{
-		address:         address,
+		Address:         address,
 		conn:            udpConn,
 		cliConn:         cliConn,
+		UIPort:          uiPort,
 		Name:            name,
 		simple:          simple,
 		Peers:           peers,
@@ -98,7 +100,7 @@ func (gossiper *Gossiper) listenClient() {
 			packet := &messages.GossipPacket{
 				Simple: &messages.SimpleMessage{
 					OriginalName:  gossiper.Name,
-					RelayPeerAddr: gossiper.address,
+					RelayPeerAddr: gossiper.Address,
 					Contents:      textMsg,
 				},
 			}
@@ -419,7 +421,7 @@ func (gossiper *Gossiper) getGossipPacket() (*messages.GossipPacket, *net.UDPAdd
 func (gossiper *Gossiper) sendSimple(packet *messages.GossipPacket) {
 	// Save previous address, update packet with address and encode it
 	fromPeer := packet.Simple.RelayPeerAddr
-	packet.Simple.RelayPeerAddr = gossiper.address
+	packet.Simple.RelayPeerAddr = gossiper.Address
 	packetBytes, err := protobuf.Encode(packet)
 	tools.Check(err)
 
