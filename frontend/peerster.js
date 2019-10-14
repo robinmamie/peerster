@@ -1,4 +1,5 @@
 $(document).ready(function() {
+    getAllMessages()
     update()
     timer = setInterval(update, 1000)
 
@@ -41,6 +42,19 @@ function saveNode() {
     $.post("/peers", {node: node}) // TODO should add listener to update after done?
     $('#nodeInput').val('')
     update()
+}
+
+function getAllMessages() {
+    $.get("/fullchat", function(messages){
+        if (messages !== null) {
+            for (let el of messages) {
+                $(".messages").append(el)
+            }
+            $(".messages").animate({
+                scrollTop: $('.messages').prop("scrollHeight")
+            }, 1000);
+        }
+    });
 }
 
 function update() {

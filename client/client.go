@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/robinmamie/Peerster/messages"
+	"github.com/robinmamie/Peerster/tools"
 
 	"github.com/dedis/protobuf"
 )
@@ -22,29 +23,20 @@ func main() {
 		Text: textMsg,
 	}
 	packetBytes, err := protobuf.Encode(&msg)
-	if err != nil {
-		log.Fatal(err)
-	}
+	tools.Check(err)
 
 	// Create local UDP connection
 	conn, err := net.Dial("udp4", ":"+uiPort)
-	if err != nil {
-		log.Fatal(err)
-	}
+	tools.Check(err)
 
 	// Send packet and close connection
 	bytes, err := conn.Write(packetBytes)
-	// TODO !! modularize error handling
-	if err != nil {
-		log.Fatal(err)
-	}
+	tools.Check(err)
 	if bytes != len(packetBytes) {
 		log.Fatal(bytes, "bytes were sent instead of", len(packetBytes),
 			"bytes.")
 	}
-	err = conn.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
 
+	err = conn.Close()
+	tools.Check(err)
 }
