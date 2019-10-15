@@ -123,6 +123,6 @@ func peerHandler(w http.ResponseWriter, r *http.Request) {
 		err := r.ParseForm()
 		tools.Check(err)
 		newPeer := r.PostForm["node"][0]
-		gossip.Peers = append(gossip.Peers, newPeer)
+		gossip.AddPeer(newPeer)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/robinmamie/Peerster/messages"
@@ -16,10 +17,12 @@ import (
 
 // Gossiper defines a peer and stores the necessary information to use it.
 type Gossiper struct {
-	Address         string
-	conn            *net.UDPConn
-	cliConn         *net.UDPConn
-	UIPort          string
+	// Net information
+	Address string
+	conn    *net.UDPConn
+	cliConn *net.UDPConn
+	UIPort  string
+	// Gossiper information
 	Name            string
 	simple          bool
 	Peers           []string
@@ -30,6 +33,7 @@ type Gossiper struct {
 	latestMessageID int
 	nextIDs         map[string]uint32
 	ownID           uint32
+	updateMutex     *sync.Mutex
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
@@ -76,6 +80,7 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		latestMessageID: 0,
 		nextIDs:         nextIDs,
 		ownID:           1,
+		updateMutex:     &sync.Mutex{},
 	}
 }
 
@@ -138,11 +143,7 @@ func (gossiper *Gossiper) listen() {
 
 		// Add sender to known peers
 		if gossiper.isSenderAbsent(addressTxt) {
-			gossiper.Peers = append(gossiper.Peers, addressTxt)
-			channel := make(chan *messages.StatusPacket)
-			gossiper.statusWaiting[addressTxt] = channel
-			expChannel := make(chan bool)
-			gossiper.expected[addressTxt] = expChannel
+			gossiper.AddPeer(addressTxt)
 		}
 
 		if packet.Simple != nil {
@@ -242,11 +243,13 @@ func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) {
 
 	// New rumor detected
 	if !present {
-		// Add rumor to history
+		// Add rumor to history and update vector clock atomically
+		gossiper.updateMutex.Lock()
 		gossiper.msgHistory[rumorStatus] = packet
 		gossiper.allMessages = append(gossiper.allMessages, packet.Rumor)
 
 		gossiper.updateVectorClock(packet, rumorStatus)
+		gossiper.updateMutex.Unlock()
 
 		if target, ok := gossiper.pickRandomPeer(); ok {
 			gossiper.rumormonger(packet, target)
@@ -273,6 +276,7 @@ func (gossiper *Gossiper) updateVectorClock(packet *messages.GossipPacket, rumor
 		// It's a new message, initialize the vector clock accordingly.
 		gossiper.nextIDs[packet.Rumor.Origin] = 2
 	} else {
+		// Got a newer message, still wait on #1
 		gossiper.nextIDs[packet.Rumor.Origin] = 1
 	}
 
@@ -310,8 +314,7 @@ func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target stri
 						// Announce that the package is expected
 						gossiper.expected[target] <- true
 						if gossiper.compareVectors(status, target) && tools.FlipCoin() {
-							target, ok := gossiper.pickRandomPeer()
-							if ok {
+							if target, ok := gossiper.pickRandomPeer(); ok {
 								fmt.Println("FLIPPED COIN sending rumor to", target)
 								defer gossiper.rumormonger(packet, target)
 							}
@@ -475,4 +478,13 @@ func (gossiper *Gossiper) GetLatestRumorMessagesList() []*messages.RumorMessage 
 func (gossiper *Gossiper) GetRumorMessagesList() []*messages.RumorMessage {
 	gossiper.latestMessageID = len(gossiper.allMessages)
 	return gossiper.allMessages
+}
+
+// AddPeer adds a new known peer and its logic to the gossiper.
+func (gossiper *Gossiper) AddPeer(address string) {
+	gossiper.Peers = append(gossiper.Peers, address)
+	channel := make(chan *messages.StatusPacket)
+	gossiper.statusWaiting[address] = channel
+	expChannel := make(chan bool)
+	gossiper.expected[address] = expChannel
 }
