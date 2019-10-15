@@ -174,6 +174,9 @@ func (gossiper *Gossiper) listen() {
 			}
 			fmt.Println()
 			gossiper.printPeers()
+			if packet.Status.IsEqual(gossiper.nextIDs) {
+				fmt.Println("IN SYNC WITH", addressTxt)
+			}
 
 			// Wake up correctsubroutine if status received
 			unexpected := true
@@ -190,6 +193,7 @@ func (gossiper *Gossiper) listen() {
 					for listening {
 						select {
 						case channel <- packet.Status:
+							// Allow for the routine to process the message
 							timeout := time.NewTicker(10 * time.Millisecond)
 							select {
 							case <-gossiper.expected[target]:
@@ -326,7 +330,6 @@ func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target stri
 func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target string) bool {
 	// 3. If equal, then return immediately.
 	if status.IsEqual(gossiper.nextIDs) {
-		fmt.Println("IN SYNC WITH", target)
 		return true
 	}
 	ourStatus := gossiper.getCurrentStatus().Status.Want
