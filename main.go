@@ -8,6 +8,8 @@ import (
 	"github.com/robinmamie/Peerster/web"
 )
 
+const guiPort string = "8080"
+
 func main() {
 
 	// Parse flags

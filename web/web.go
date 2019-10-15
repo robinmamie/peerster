@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
+	"strconv"
 
 	"github.com/robinmamie/Peerster/messages"
 	"github.com/robinmamie/Peerster/tools"
@@ -20,17 +20,20 @@ var localAddress string
 
 // InitWebServer starts the web server.
 func InitWebServer(g *gossiper.Gossiper, uiPort string) {
+	localAddress = ":" + uiPort
 	gossip = g
 	http.Handle("/", http.FileServer(http.Dir("./frontend")))
 	http.HandleFunc("/id", getNodeID)
 	http.HandleFunc("/chat", chatHandler)
 	http.HandleFunc("/fullchat", fullChatHandler)
 	http.HandleFunc("/peers", peerHandler)
-	localAddress = ":" + uiPort
+	guiPort := 8080
 	for {
-		// Port number hard-coded
-		err := http.ListenAndServe(localAddress, nil)
-		tools.Check(err)
+		serverAddress := ":" + strconv.Itoa(guiPort)
+		err := http.ListenAndServe(serverAddress, nil)
+		if err != nil {
+			guiPort++
+		}
 	}
 }
 
@@ -50,7 +53,6 @@ func getNodeID(w http.ResponseWriter, r *http.Request) {
 func parseRumorList(msgList []*messages.RumorMessage) []string {
 	var messages []string = nil
 	for _, r := range msgList {
-		r.Text = strings.ReplaceAll(r.Text, "<", "&lt;")
 		msg := r.Origin + " (" + fmt.Sprint(r.ID) + "): <code>" + r.Text + "</code>"
 		msg = "<p id=\"msg\">" + msg + "</p>"
 		messages = append(messages, msg)
