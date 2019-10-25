@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/robinmamie/Peerster/files"
+
 	"github.com/robinmamie/Peerster/messages"
 	"github.com/robinmamie/Peerster/tools"
 
@@ -23,17 +25,26 @@ type Gossiper struct {
 	cliConn *net.UDPConn
 	UIPort  string
 	// Gossiper information
-	Name            string
-	simple          bool
-	Peers           []string
-	statusWaiting   map[string]chan *messages.StatusPacket
-	expected        map[string]chan bool
+	Name   string
+	simple bool
+	Peers  []string
+	// Channels used to communicate between threads
+	statusWaiting map[string]chan *messages.StatusPacket
+	expected      map[string]chan bool
+	// Message history
 	msgHistory      map[messages.PeerStatus]*messages.GossipPacket
 	allMessages     []*messages.RumorMessage
 	latestMessageID int
-	nextIDs         map[string]uint32
-	ownID           uint32
-	updateMutex     *sync.Mutex
+	// ID information
+	vectorClock map[string]uint32
+	maxIDs      map[string]uint32
+	ownID       uint32
+	// Routing table used for next hops
+	routingTable map[string]string
+	// Slice of indexed files
+	indexedFiles []*files.FileMetadata
+	// Lock used to synchronize writing on the vector clock and the history
+	updateMutex *sync.Mutex
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
@@ -54,41 +65,43 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 	statusWaiting := make(map[string](chan *messages.StatusPacket))
 	expected := make(map[string]chan bool)
 	for _, p := range peers {
-		channel := make(chan *messages.StatusPacket)
-		statusWaiting[p] = channel
-		expChannel := make(chan bool)
-		expected[p] = expChannel
+		statusWaiting[p] = make(chan *messages.StatusPacket)
+		expected[p] = make(chan bool)
 	}
 
-	// Map between an identifier and a list of RumorMessage
-	msgHistory := make(map[messages.PeerStatus]*messages.GossipPacket)
-	allMessages := make([]*messages.RumorMessage, 0)
-	nextIDs := make(map[string]uint32)
-
 	return &Gossiper{
-		Address:         address,
-		conn:            udpConn,
-		cliConn:         cliConn,
-		UIPort:          uiPort,
-		Name:            name,
-		simple:          simple,
-		Peers:           peers,
-		statusWaiting:   statusWaiting,
-		expected:        expected,
-		msgHistory:      msgHistory,
-		allMessages:     allMessages,
+		Address:       address,
+		conn:          udpConn,
+		cliConn:       cliConn,
+		UIPort:        uiPort,
+		Name:          name,
+		simple:        simple,
+		Peers:         peers,
+		statusWaiting: statusWaiting,
+		expected:      expected,
+		// Map between an identifier and a list of RumorMessages
+		msgHistory:      make(map[messages.PeerStatus]*messages.GossipPacket),
+		allMessages:     make([]*messages.RumorMessage, 0),
 		latestMessageID: 0,
-		nextIDs:         nextIDs,
+		vectorClock:     make(map[string]uint32),
+		maxIDs:          make(map[string]uint32),
 		ownID:           1,
+		routingTable:    make(map[string]string),
+		indexedFiles:    make([]*files.FileMetadata, 0),
 		updateMutex:     &sync.Mutex{},
 	}
 }
 
 // Run starts the node and runs it.
-func (gossiper *Gossiper) Run(antiEntropyDelay uint64) {
+func (gossiper *Gossiper) Run(antiEntropyDelay uint64, rtimer uint64) {
 	// Activate anti-entropy if necessary
-	if !gossiper.simple && antiEntropyDelay > 0 {
-		go gossiper.antiEntropy(antiEntropyDelay)
+	if !gossiper.simple {
+		if antiEntropyDelay > 0 {
+			go gossiper.antiEntropy(antiEntropyDelay)
+		}
+		if rtimer > 0 {
+			go gossiper.routeRumor(rtimer)
+		}
 	}
 
 	go gossiper.listenClient()
@@ -98,28 +111,53 @@ func (gossiper *Gossiper) Run(antiEntropyDelay uint64) {
 // listenClient handles the messages coming from the client.
 func (gossiper *Gossiper) listenClient() {
 	for {
-		textMsg := gossiper.getMessage()
-		fmt.Println("CLIENT MESSAGE", textMsg)
+		message := gossiper.getMessage()
+		fmt.Println("CLIENT MESSAGE", message.Text)
 
 		if gossiper.simple {
 			packet := &messages.GossipPacket{
 				Simple: &messages.SimpleMessage{
 					OriginalName:  gossiper.Name,
 					RelayPeerAddr: gossiper.Address,
-					Contents:      textMsg,
+					Contents:      message.Text,
 				},
 			}
 			gossiper.sendSimple(packet)
 		} else {
-			packet := &messages.GossipPacket{
-				Rumor: &messages.RumorMessage{
-					Origin: gossiper.Name,
-					ID:     gossiper.ownID,
-					Text:   textMsg,
-				},
+			if *message.Destination != "" {
+				packet := &messages.GossipPacket{
+					Private: &messages.PrivateMessage{
+						Origin:      gossiper.Name,
+						ID:          0,
+						Text:        message.Text,
+						Destination: *message.Destination,
+						HopLimit:    9, // The source already decrements it.
+					},
+				}
+				if address, ok := gossiper.routingTable[packet.Private.Destination]; ok {
+					gossiper.sendGossipPacket(address, packet)
+				}
+			} else if *message.File != "" {
+				if *message.Destination != "" {
+
+				} else {
+					gossiper.indexedFiles = append(gossiper.indexedFiles,
+						files.NewFileMetadata(*message.File))
+				}
+			} else {
+				packet := &messages.GossipPacket{
+					Rumor: &messages.RumorMessage{
+						Origin: gossiper.Name,
+						ID:     gossiper.ownID,
+						Text:   message.Text,
+					},
+				}
+				// TODO use another lock?
+				gossiper.updateMutex.Lock()
+				gossiper.ownID++
+				gossiper.updateMutex.Unlock()
+				gossiper.receivedRumor(packet, "")
 			}
-			gossiper.ownID++
-			gossiper.receivedRumor(packet)
 		}
 	}
 }
@@ -157,63 +195,88 @@ func (gossiper *Gossiper) listen() {
 			if gossiper.simple {
 				gossiper.sendSimple(packet)
 			}
-		} else if !gossiper.simple && packet.Rumor != nil {
-			// Received a rumor
-			fmt.Println("RUMOR origin", packet.Rumor.Origin, "from",
-				address, "ID", packet.Rumor.ID, "contents",
-				packet.Rumor.Text)
-			gossiper.printPeers()
+		} else if !gossiper.simple {
+			if packet.Rumor != nil {
+				// Received a rumor
+				fmt.Println("RUMOR origin", packet.Rumor.Origin, "from",
+					address, "ID", packet.Rumor.ID, "contents",
+					packet.Rumor.Text)
+				gossiper.printPeers()
 
-			gossiper.receivedRumor(packet)
-			gossiper.sendCurrentStatus(addressTxt)
+				gossiper.receivedRumor(packet, addressTxt)
+				gossiper.sendCurrentStatus(addressTxt)
 
-		} else if !gossiper.simple && packet.Status != nil {
-			// Received a status message
-			fmt.Print("STATUS from ", address)
-			for _, s := range packet.Status.Want {
-				fmt.Print(" peer ", s.Identifier, " nextID ", s.NextID)
-			}
-			fmt.Println()
-			gossiper.printPeers()
-			if packet.Status.IsEqual(gossiper.nextIDs) {
-				fmt.Println("IN SYNC WITH", addressTxt)
-			}
+			} else if packet.Status != nil {
+				// Received a status message
+				fmt.Print("STATUS from ", address)
+				for _, s := range packet.Status.Want {
+					fmt.Print(" peer ", s.Identifier, " nextID ", s.NextID)
+				}
+				fmt.Println()
+				gossiper.printPeers()
+				if packet.Status.IsEqual(gossiper.vectorClock) {
+					fmt.Println("IN SYNC WITH", addressTxt)
+				}
 
-			// Wake up correctsubroutine if status received
-			unexpected := true
-			for target, channel := range gossiper.statusWaiting {
+				// Wake up correct subroutine if status received
+				unexpected := true
+				for target, channel := range gossiper.statusWaiting {
 
-				if target == addressTxt {
-					// Empty expected channel before
-					for len(gossiper.expected[target]) > 0 {
-						<-gossiper.expected[target]
-					}
+					if target == addressTxt {
+						// Empty expected channel before
+						for len(gossiper.expected[target]) > 0 {
+							<-gossiper.expected[target]
+						}
 
-					// Send packet to correct channel, as many times as possible
-					listening := true
-					for listening {
-						select {
-						case channel <- packet.Status:
-							// Allow for the routine to process the message
-							timeout := time.NewTicker(10 * time.Millisecond)
+						// Send packet to correct channel, as many times as possible
+						listening := true
+						for listening {
 							select {
-							case <-gossiper.expected[target]:
-								unexpected = false
-							case <-timeout.C:
+							case channel <- packet.Status:
+								// Allow for the routine to process the message
+								timeout := time.NewTicker(10 * time.Millisecond)
+								select {
+								case <-gossiper.expected[target]:
+									unexpected = false
+								case <-timeout.C:
+									listening = false
+								}
+							default:
 								listening = false
 							}
-						default:
-							listening = false
 						}
 					}
 				}
-			}
-			// If unexpected Status, then compare vectors
-			if unexpected {
-				gossiper.compareVectors(packet.Status, addressTxt)
+				// If unexpected Status, then compare vectors
+				if unexpected {
+					gossiper.compareVectors(packet.Status, addressTxt)
+				}
+			} else {
+				switch {
+				case packet.Private != nil:
+					if gossiper.ptpMessageReachedDestination(packet.Private) {
+						fmt.Println("PRIVATE origin", packet.Private.Origin,
+							"hop-limit", packet.Private.HopLimit,
+							"contents", packet.Private.Text)
+					}
+					// TODO ! should also write peers?
+					// TODO !! what to do for the GUI? Other list? Same list but with GossipPacket and then the server handles the differences with a switch?
+				}
 			}
 		}
 	}
+}
+
+func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.PointToPoint) bool {
+	if ptpMessage.GetDestination() == gossiper.Name {
+		return true
+	}
+	// TODO combine 2 interface functions (get/decrement hoplimit) in 1?
+	if ptpMessage.GetHopLimit() > 0 {
+		ptpMessage.DecrementHopLimit()
+		gossiper.sendGossipPacket(gossiper.routingTable[ptpMessage.GetDestination()], ptpMessage.CreatePacket())
+	}
+	return false
 }
 
 // isSenderAbsent returns true if the given address is not in the list of known
@@ -233,7 +296,7 @@ func (gossiper *Gossiper) printPeers() {
 }
 
 // receivedRumor handles any received rumor, new or not.
-func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) {
+func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket, address string) {
 
 	rumorStatus := messages.PeerStatus{
 		Identifier: packet.Rumor.Origin,
@@ -246,9 +309,14 @@ func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) {
 		// Add rumor to history and update vector clock atomically
 		gossiper.updateMutex.Lock()
 		gossiper.msgHistory[rumorStatus] = packet
-		gossiper.allMessages = append(gossiper.allMessages, packet.Rumor)
+		// Do not display route rumors on the GUI
+		if packet.Rumor.Text != "" {
+			gossiper.allMessages = append(gossiper.allMessages, packet.Rumor)
+		}
 
+		// TODO give rumors as arguments, not packets
 		gossiper.updateVectorClock(packet, rumorStatus)
+		gossiper.updateRoutingTable(packet, address)
 		gossiper.updateMutex.Unlock()
 
 		if target, ok := gossiper.pickRandomPeer(); ok {
@@ -259,14 +327,14 @@ func (gossiper *Gossiper) receivedRumor(packet *messages.GossipPacket) {
 
 // updateVectorClock updates the internal vector clock.
 func (gossiper *Gossiper) updateVectorClock(packet *messages.GossipPacket, rumorStatus messages.PeerStatus) {
-	if val, ok := gossiper.nextIDs[packet.Rumor.Origin]; ok {
+	if val, ok := gossiper.vectorClock[packet.Rumor.Origin]; ok {
 		if val == packet.Rumor.ID {
 			stillPresent := true
 			status := rumorStatus
 			// Verify if a sequence was completed
 			for stillPresent {
 				status.NextID++
-				gossiper.nextIDs[packet.Rumor.Origin]++
+				gossiper.vectorClock[packet.Rumor.Origin]++
 				_, stillPresent = gossiper.msgHistory[status]
 			}
 		}
@@ -274,12 +342,35 @@ func (gossiper *Gossiper) updateVectorClock(packet *messages.GossipPacket, rumor
 
 	} else if packet.Rumor.ID == 1 {
 		// It's a new message, initialize the vector clock accordingly.
-		gossiper.nextIDs[packet.Rumor.Origin] = 2
+		gossiper.vectorClock[packet.Rumor.Origin] = 2
 	} else {
 		// Got a newer message, still wait on #1
-		gossiper.nextIDs[packet.Rumor.Origin] = 1
+		gossiper.vectorClock[packet.Rumor.Origin] = 1
 	}
+}
 
+// updateRoutingTable takes a RumorMessage and updates the routing table accordingly.
+func (gossiper *Gossiper) updateRoutingTable(packet *messages.GossipPacket, address string) {
+	if address == "" {
+		// The request comes from the client listener, ignore
+		return
+	}
+	if val, ok := gossiper.maxIDs[packet.Rumor.Origin]; ok {
+		if packet.Rumor.ID <= val {
+			return
+		}
+		gossiper.maxIDs[packet.Rumor.Origin] = packet.Rumor.ID
+	} else {
+		gossiper.maxIDs[packet.Rumor.Origin] = packet.Rumor.ID
+		gossiper.routingTable[packet.Rumor.Origin] = address
+	}
+	// TODO should also take 1st address into account (is it an update?)
+	if address != gossiper.routingTable[packet.Rumor.Origin] {
+		gossiper.routingTable[packet.Rumor.Origin] = address
+	}
+	if packet.Rumor.Text != "" {
+		fmt.Println("DSDV", packet.Rumor.Origin, address)
+	}
 }
 
 // pickRandomPeer picks a random peer from the list of known peers of the
@@ -332,7 +423,7 @@ func (gossiper *Gossiper) rumormonger(packet *messages.GossipPacket, target stri
 // handles the updating logic. Returns true if the vectors are equal.
 func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target string) bool {
 	// 3. If equal, then return immediately.
-	if status.IsEqual(gossiper.nextIDs) {
+	if status.IsEqual(gossiper.vectorClock) {
 		return true
 	}
 	ourStatus := gossiper.getCurrentStatus().Status.Want
@@ -354,7 +445,7 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 	}
 	// 2. Verify if they know something new.
 	for _, theirE := range status.Want {
-		ourID, ok := gossiper.nextIDs[theirE.Identifier]
+		ourID, ok := gossiper.vectorClock[theirE.Identifier]
 		if !ok || ourID < theirE.NextID {
 			gossiper.sendCurrentStatus(target)
 			return false
@@ -388,7 +479,7 @@ func (gossiper *Gossiper) getCurrentStatus() *messages.GossipPacket {
 			Want: nil,
 		},
 	}
-	for k, v := range gossiper.nextIDs {
+	for k, v := range gossiper.vectorClock {
 		packet.Status.Want = append(packet.Status.Want, messages.PeerStatus{
 			Identifier: k,
 			NextID:     v,
@@ -397,9 +488,8 @@ func (gossiper *Gossiper) getCurrentStatus() *messages.GossipPacket {
 	return &packet
 }
 
-// getMessage listens to the client and waits for a Message. Returns its string
-// content.
-func (gossiper *Gossiper) getMessage() string {
+// getMessage listens to the client and waits for a Message.
+func (gossiper *Gossiper) getMessage() *messages.Message {
 	var packet messages.Message
 	packetBytes, _ := tools.GetPacketBytes(gossiper.cliConn)
 
@@ -407,7 +497,7 @@ func (gossiper *Gossiper) getMessage() string {
 	err := protobuf.Decode(packetBytes, &packet)
 	tools.Check(err)
 
-	return packet.Text
+	return &packet
 }
 
 // getGossipPacket listens to other peers and waits for a GossipPacket.
@@ -453,13 +543,46 @@ func (gossiper *Gossiper) antiEntropy(delay uint64) {
 	for {
 		select {
 		case <-ticker.C:
-			target, ok := gossiper.pickRandomPeer()
-			if ok {
+			if target, ok := gossiper.pickRandomPeer(); ok {
 				gossiper.sendCurrentStatus(target)
 			}
-		default:
+		default: // FIXME necessary?
 		}
 	}
+}
+
+// routeRumor periodically sends an empty rumor message so that neighbors do not
+// forget about this node.
+func (gossiper *Gossiper) routeRumor(rtimer uint64) {
+	// Startup route rumors
+	for _, p := range gossiper.Peers {
+		gossiper.sendRouteRumor(p)
+	}
+
+	// Periodic route rumors
+	ticker := time.NewTicker(time.Duration(rtimer) * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if target, ok := gossiper.pickRandomPeer(); ok {
+				gossiper.sendRouteRumor(target)
+			}
+		}
+	}
+}
+
+func (gossiper *Gossiper) sendRouteRumor(target string) {
+	packet := &messages.GossipPacket{
+		Rumor: &messages.RumorMessage{
+			Origin: gossiper.Name,
+			ID:     gossiper.ownID,
+			Text:   "",
+		},
+	}
+	gossiper.updateMutex.Lock()
+	gossiper.ownID++
+	gossiper.updateMutex.Unlock()
+	gossiper.receivedRumor(packet, target)
 }
 
 // GetLatestRumorMessagesList returns a list of the latest rumor messages.
@@ -483,8 +606,7 @@ func (gossiper *Gossiper) GetRumorMessagesList() []*messages.RumorMessage {
 // AddPeer adds a new known peer and its logic to the gossiper.
 func (gossiper *Gossiper) AddPeer(address string) {
 	gossiper.Peers = append(gossiper.Peers, address)
-	channel := make(chan *messages.StatusPacket)
-	gossiper.statusWaiting[address] = channel
-	expChannel := make(chan bool)
-	gossiper.expected[address] = expChannel
+	// TODO modularize this (see constructor)
+	gossiper.statusWaiting[address] = make(chan *messages.StatusPacket)
+	gossiper.expected[address] = make(chan bool)
 }
