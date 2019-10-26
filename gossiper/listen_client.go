@@ -9,6 +9,8 @@ import (
 	"github.com/robinmamie/Peerster/tools"
 )
 
+const hopLimit uint32 = 10
+
 // listenClient handles the messages coming from the client.
 func (gossiper *Gossiper) listenClient() {
 	for {
@@ -24,22 +26,27 @@ func (gossiper *Gossiper) listenClient() {
 		} else {
 			if *message.Destination != "" {
 				if *message.File != "" {
-					gossiper.indexedFiles = append(gossiper.indexedFiles,
-						files.NewFileMetadata(*message.File))
-				} else {
-					packet := &messages.GossipPacket{
-						Private: &messages.PrivateMessage{
+					if *message.Request != nil {
+						request := &messages.DataRequest{
 							Origin:      gossiper.Name,
-							ID:          0,
-							Text:        message.Text,
 							Destination: *message.Destination,
-							HopLimit:    10,
-						},
+							HopLimit:    hopLimit,
+							HashValue:   *message.Request,
+						}
+						gossiper.handleOriginDataRequest(request)
+					} else {
+						gossiper.indexedFiles = append(gossiper.indexedFiles,
+							files.NewFileMetadata(*message.File))
 					}
-					// TODO handle by source
-					if address, ok := gossiper.routingTable[packet.Private.Destination]; ok {
-						gossiper.sendGossipPacket(address, packet)
+				} else {
+					private := &messages.PrivateMessage{
+						Origin:      gossiper.Name,
+						ID:          0,
+						Text:        message.Text,
+						Destination: *message.Destination,
+						HopLimit:    hopLimit,
 					}
+					gossiper.handlePrivate(private)
 				}
 			} else {
 				rumor := &messages.RumorMessage{
@@ -59,7 +66,6 @@ func (gossiper *Gossiper) listenClient() {
 
 // getMessage listens to the client and waits for a Message.
 func (gossiper *Gossiper) getMessage() *messages.Message {
-
 	packetBytes, _ := tools.GetPacketBytes(gossiper.cliConn)
 
 	// Decode packet

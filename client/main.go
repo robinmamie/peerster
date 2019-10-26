@@ -16,17 +16,21 @@ func main() {
 	var textMsg string
 	var dest string
 	var file string
+	var request string
 	flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
 	flag.StringVar(&textMsg, "msg", "", "message to be sent; if the -dest flag is present, this is a private message, otherwise it's a rumor message")
 	flag.StringVar(&dest, "dest", "", "destination for the private message; can be omitted")
 	flag.StringVar(&file, "file", "", "file to be indexed by the gossiper")
+	flag.StringVar(&request, "file", "", "file to be indexed by the gossiper")
 	flag.Parse()
 
+	byteRequest := []byte(request)
 	// Create and encode packet
 	msg := messages.Message{
 		Text:        textMsg,
 		Destination: &dest,
 		File:        &file,
+		Request:     &byteRequest,
 	}
 	packetBytes, err := protobuf.Encode(&msg)
 	tools.Check(err)

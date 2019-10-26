@@ -90,7 +90,7 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 
 // Run starts the node and runs it.
 func (gossiper *Gossiper) Run(antiEntropyDelay uint64, rtimer uint64) {
-	// Activate anti-entropy if necessary
+	// Activate anti-entropy/route rumors if necessary
 	if !gossiper.simple {
 		if antiEntropyDelay > 0 {
 			go gossiper.antiEntropy(antiEntropyDelay)
