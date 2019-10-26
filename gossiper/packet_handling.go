@@ -6,16 +6,16 @@ import (
 	"github.com/robinmamie/Peerster/tools"
 )
 
-// getGossipPacket listens to other peers and waits for a GossipPacket.
-func (gossiper *Gossiper) getGossipPacket() (*messages.GossipPacket, string) {
-	var packet messages.GossipPacket
-	packetBytes, address := tools.GetPacketBytes(gossiper.conn)
+// getMessage listens to the client and waits for a Message.
+func (gossiper *Gossiper) getMessage() *messages.Message {
+	packetBytes, _ := tools.GetPacketBytes(gossiper.cliConn)
 
 	// Decode packet
-	err := protobuf.Decode(packetBytes, &packet)
+	var msg messages.Message
+	err := protobuf.Decode(packetBytes, &msg)
 	tools.Check(err)
 
-	return &packet, tools.AddressToString(address)
+	return &msg
 }
 
 // sendSimple sends a simple message to all other peers except the one who just
@@ -37,6 +37,18 @@ func (gossiper *Gossiper) sendSimple(simple *messages.SimpleMessage) {
 			tools.SendPacketBytes(gossiper.conn, address, packetBytes)
 		}
 	}
+}
+
+// getGossipPacket listens to other peers and waits for a GossipPacket.
+func (gossiper *Gossiper) getGossipPacket() (*messages.GossipPacket, string) {
+	var packet messages.GossipPacket
+	packetBytes, address := tools.GetPacketBytes(gossiper.conn)
+
+	// Decode packet
+	err := protobuf.Decode(packetBytes, &packet)
+	tools.Check(err)
+
+	return &packet, tools.AddressToString(address)
 }
 
 // sendGossipPacket sends a gossipPacket to the mentionned address.
