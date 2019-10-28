@@ -14,12 +14,6 @@ func (gossiper *Gossiper) listenClient() {
 	for {
 		message := gossiper.getMessage()
 
-		fmt.Print("CLIENT MESSAGE ", message.Text)
-		if *message.Destination != "" {
-			fmt.Print(" dest ", *message.Destination)
-		}
-		fmt.Println()
-
 		if gossiper.simple {
 			gossiper.createSimple(message)
 		} else {
@@ -27,13 +21,12 @@ func (gossiper *Gossiper) listenClient() {
 				if *message.File != "" {
 					if *message.Request != nil {
 						gossiper.createRequest(message)
-					} else {
-						gossiper.indexedFiles = append(gossiper.indexedFiles,
-							files.NewFileMetadata(*message.File))
 					}
 				} else {
 					gossiper.createPrivate(message)
 				}
+			} else if *message.File != "" {
+				gossiper.indexFile(*message.File)
 			} else {
 				gossiper.createRumor(message)
 			}
@@ -57,13 +50,26 @@ func (gossiper *Gossiper) createRequest(message *messages.Message) {
 		HopLimit:    hopLimit,
 		HashValue:   *message.Request,
 	}
-	gossiper.handleOriginDataRequest(request)
+	gossiper.handleClientDataRequest(request, *message.File)
+}
+
+func (gossiper *Gossiper) indexFile(fileName string) {
+	// TODO Should we print something when indexing?
+	fileMetaData, chunks := files.NewFileMetadata(fileName)
+	gossiper.indexedFiles = append(gossiper.indexedFiles, fileMetaData)
+	// TODO !! store chunks in gossiper.fileChunks[fileName]!!
+	if chunks != nil {
+		gossiper.fileChunks[fileName] = chunks
+	}
 }
 
 func (gossiper *Gossiper) createPrivate(message *messages.Message) {
+	fmt.Println("CLIENT MESSAGE", message.Text,
+		"dest", *message.Destination)
+
 	private := &messages.PrivateMessage{
 		Origin:      gossiper.Name,
-		ID:          0,
+		ID:          0, // No need to count
 		Text:        message.Text,
 		Destination: *message.Destination,
 		HopLimit:    hopLimit,
@@ -72,6 +78,8 @@ func (gossiper *Gossiper) createPrivate(message *messages.Message) {
 }
 
 func (gossiper *Gossiper) createRumor(message *messages.Message) {
+	fmt.Println("CLIENT MESSAGE", message.Text)
+
 	rumor := &messages.RumorMessage{
 		Origin: gossiper.Name,
 		ID:     gossiper.ownID,

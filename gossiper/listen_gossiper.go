@@ -1,6 +1,6 @@
 package gossiper
 
-// listen handles all the messages coming from other gossipers.
+// listenGossiper handles all the messages coming from other gossipers.
 func (gossiper *Gossiper) listenGossiper() {
 	for {
 		packet, address := gossiper.getGossipPacket()

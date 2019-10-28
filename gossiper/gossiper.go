@@ -27,10 +27,13 @@ type Gossiper struct {
 	// Channels used to communicate between threads
 	statusWaiting map[string]chan *messages.StatusPacket
 	expected      map[string]chan bool
+	dataChannels  map[string]chan *messages.DataReply
 	// Message history
+	// TODO find a way to combine them?
 	msgHistory      map[messages.PeerStatus]*messages.RumorMessage
 	allMessages     []*messages.RumorMessage
 	latestMessageID int
+	fileChunks      map[string][][]byte
 	// ID information
 	vectorClock map[string]uint32
 	maxIDs      map[string]uint32
@@ -75,10 +78,12 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		Peers:         peers,
 		statusWaiting: statusWaiting,
 		expected:      expected,
+		dataChannels:  make(map[string]chan *messages.DataReply),
 		// Map between an identifier and a list of RumorMessages
 		msgHistory:      make(map[messages.PeerStatus]*messages.RumorMessage),
 		allMessages:     make([]*messages.RumorMessage, 0),
 		latestMessageID: 0,
+		fileChunks:      make(map[string][][]byte),
 		vectorClock:     make(map[string]uint32),
 		maxIDs:          make(map[string]uint32),
 		ownID:           1,

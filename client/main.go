@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"log"
 	"net"
@@ -21,10 +22,11 @@ func main() {
 	flag.StringVar(&textMsg, "msg", "", "message to be sent; if the -dest flag is present, this is a private message, otherwise it's a rumor message")
 	flag.StringVar(&dest, "dest", "", "destination for the private message; can be omitted")
 	flag.StringVar(&file, "file", "", "file to be indexed by the gossiper")
-	flag.StringVar(&request, "file", "", "file to be indexed by the gossiper")
+	flag.StringVar(&request, "request", "", "request a chunk or metafile of this hash") // TODO could request a chunk WTF??
 	flag.Parse()
 
-	byteRequest := []byte(request)
+	byteRequest, err := hex.DecodeString(request)
+	tools.Check(err)
 	// Create and encode packet
 	msg := messages.Message{
 		Text:        textMsg,

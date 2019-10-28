@@ -2,7 +2,6 @@ package files
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -25,20 +24,20 @@ type FileMetadata struct {
 }
 
 // NewFileMetadata creates the metadata of a given file
-func NewFileMetadata(name string) *FileMetadata {
+func NewFileMetadata(name string) (*FileMetadata, [][]byte) {
 	// Import file
 	file := getFileData(name)
 
 	// Compute metadata
 	fileSize := len(file)
-	metaFile, metaHash := createMetaFile(file, fileSize)
+	metaFile, metaHash, chunks := createMetaFile(file, fileSize)
 
 	return &FileMetadata{
 		FileName: name,
 		FileSize: fileSize,
 		MetaFile: metaFile,
 		MetaHash: metaHash,
-	}
+	}, chunks
 }
 
 func getFileData(name string) []byte {
@@ -46,7 +45,7 @@ func getFileData(name string) []byte {
 	tools.Check(err)
 	pathToFolder := filepath.Dir(pathToExecutable)
 	pathToFile := pathToFolder + "/_SharedFiles/" + name
-	fmt.Println(pathToFile)
+
 	file, err := os.Open(pathToFile)
 	tools.Check(err)
 	fileBytes, err := ioutil.ReadAll(file)
@@ -55,21 +54,24 @@ func getFileData(name string) []byte {
 	return fileBytes
 }
 
-func createMetaFile(file []byte, fileSize int) ([]byte, []byte) {
+func createMetaFile(file []byte, fileSize int) ([]byte, []byte, [][]byte) {
 	// Compute number of chunks
-	chunks := fileSize / ChunkSize
+	chunkNumber := fileSize / ChunkSize
+	// Have to add 1 unless the final chunk is exactly full
 	if fileSize%ChunkSize != 0 {
-		chunks++
+		chunkNumber++
 	}
 	sums := make([]byte, 0)
-	for i := 0; i < chunks; i++ {
+	chunks := make([][]byte, 0)
+	for i := 0; i < chunkNumber; i++ {
 		endIndex := getEndIndex(i, fileSize)
-		sum := sha256.Sum256(file[ChunkSize*i : endIndex])
-		//s := fmt.Sprintf("%x", sum)
+		chunk := file[ChunkSize*i : endIndex]
+		chunks = append(chunks, chunk)
+		sum := sha256.Sum256(chunk)
 		sums = append(sums, sum[:]...)
 	}
 	metaHash := sha256.Sum256(sums)
-	return sums, metaHash[:]
+	return sums, metaHash[:], chunks
 }
 
 func getEndIndex(i int, fileSize int) int {
@@ -80,13 +82,6 @@ func getEndIndex(i int, fileSize int) int {
 	return endIndex
 }
 
-/*
-TODO !!
-Finally, for performance, you should consider storing the chunks of a file separately after the
-file has been indexed and completely downloaded, so if some specific chunk is requested,
-your gossiper does not have to reparse the whole file.
-*/
-
 // ExtractCorrespondingData returns the corresponding data from the
 // FileMetadata and the chunk number.
 func (fileMeta FileMetadata) ExtractCorrespondingData(i int) []byte {
@@ -96,4 +91,20 @@ func (fileMeta FileMetadata) ExtractCorrespondingData(i int) []byte {
 	file := getFileData(fileMeta.FileName)
 	endIndex := getEndIndex(i, fileMeta.FileSize)
 	return file[ChunkSize*i : endIndex]
+}
+
+// BuildFileFromChunks reconstructs a file using all data chunks.
+func BuildFileFromChunks(fileName string, chunks [][]byte) {
+
+	fileContents := make([]byte, 0)
+	for _, chunk := range chunks {
+		fileContents = append(fileContents, chunk...)
+	}
+
+	pathToExecutable, err := os.Executable()
+	tools.Check(err)
+	pathToFolder := filepath.Dir(pathToExecutable)
+	pathToFile := pathToFolder + "/_Downloads/" + fileName
+	err = ioutil.WriteFile(pathToFile, fileContents, 0644)
+	tools.Check(err)
 }
