@@ -13,8 +13,8 @@ import (
 // ChunkSize designates the size of a chunk in bytes.
 const ChunkSize int = 1 << 13 // 8KB
 
-// SHA256Size designates the size of a SHA-256 hash in bytes.
-const SHA256Size int = 32
+// SHA256ByteSize designates the size of a SHA-256 hash in bytes.
+const SHA256ByteSize int = 32
 
 // FileMetadata describes all the necessary information about a file.
 type FileMetadata struct {

@@ -3,8 +3,12 @@ package main
 import (
 	"encoding/hex"
 	"flag"
+	"fmt"
 	"log"
 	"net"
+	"os"
+
+	"github.com/robinmamie/Peerster/files"
 
 	"github.com/robinmamie/Peerster/messages"
 	"github.com/robinmamie/Peerster/tools"
@@ -25,8 +29,13 @@ func main() {
 	flag.StringVar(&request, "request", "", "request a chunk or metafile of this hash") // TODO could request a chunk WTF??
 	flag.Parse()
 
-	byteRequest, err := hex.DecodeString(request)
-	tools.Check(err)
+	checkFlags(textMsg, dest, file, request)
+
+	var byteRequest []byte = nil
+	if request != "" {
+		byteRequest = checkRequest(request)
+	}
+
 	// Create and encode packet
 	msg := messages.Message{
 		Text:        textMsg,
@@ -51,4 +60,40 @@ func main() {
 
 	err = conn.Close()
 	tools.Check(err)
+}
+
+func checkFlags(textMsg string, dest string, file string, request string) {
+	textDefined := textMsg != ""
+	destDefined := dest != ""
+	fileDefined := file != ""
+	requestDefined := request != ""
+
+	// Destination defined without anything else
+	impossibleCombination := destDefined && !textDefined && !fileDefined && !requestDefined
+	// Text and file/request defined
+	impossibleCombination = impossibleCombination || (textDefined && (fileDefined || requestDefined))
+	// Request defined without file name or destination
+	impossibleCombination = impossibleCombination || (requestDefined && (!fileDefined || !destDefined))
+	// Destintation defined when only file defined
+	impossibleCombination = (fileDefined && destDefined && !requestDefined)
+
+	panicIfTrue(impossibleCombination, "ERROR (Bad argument combination)")
+}
+
+func checkRequest(request string) []byte {
+	byteRequest, err := hex.DecodeString(request)
+	invalidRequest := err != nil
+	// Request has not the required size
+	invalidRequest = invalidRequest || len(request) != files.SHA256ByteSize*2
+	// Parsed request has not the required size
+	invalidRequest = invalidRequest || len(byteRequest) != files.SHA256ByteSize
+	panicIfTrue(invalidRequest, "ERROR (Unable to decode hex hash)")
+	return byteRequest
+}
+
+func panicIfTrue(b bool, errorMessage string) {
+	if b {
+		fmt.Println(errorMessage)
+		os.Exit(1)
+	}
 }

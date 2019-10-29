@@ -114,12 +114,12 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 			MetaHash: reply.HashValue,
 		}
 		gossiper.indexedFiles = append(gossiper.indexedFiles, fileMetaData)
-		totalChunks := len(metaFile) / files.SHA256Size
+		totalChunks := len(metaFile) / files.SHA256ByteSize
 		gossiper.fileChunks[fileName] = make([][]byte, 0)
 
 		for chunkNumber := 1; chunkNumber <= totalChunks; chunkNumber++ {
 			// Send chunks request & reset hop limit
-			request.HashValue = metaFile[files.SHA256Size*(chunkNumber-1) : files.SHA256Size*chunkNumber]
+			request.HashValue = metaFile[files.SHA256ByteSize*(chunkNumber-1) : files.SHA256ByteSize*chunkNumber]
 			request.HopLimit = hopLimit
 			gossiper.handleDataRequest(request)
 			printFileDownloadInformation(request, fileName, chunkNumber)
@@ -174,7 +174,7 @@ func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest) {
 			chunks := gossiper.fileChunks[fileMetadata.FileName]
 			numberOfChunks := len(chunks)
 			for i := 0; i < numberOfChunks; i++ {
-				currentHash := fmt.Sprintf("%x", fileMetadata.MetaFile[files.SHA256Size*i:files.SHA256Size*(i+1)])
+				currentHash := fmt.Sprintf("%x", fileMetadata.MetaFile[files.SHA256ByteSize*i:files.SHA256ByteSize*(i+1)])
 				if currentHash == requestedHash {
 					gossiper.sendDataReply(request, chunks[i])
 					return

@@ -41,8 +41,8 @@ func main() {
 	}
 
 	// Create directories for file handling
-	os.Mkdir("_Downloads", 0644) // TODO magic string
-	os.Mkdir("_SharedFiles", 0644)
+	os.Mkdir("_Downloads", 0755) // TODO magic string
+	os.Mkdir("_SharedFiles", 0755)
 
 	gossiper := gossiper.NewGossiper(gossipAddr, name, uiPort, simple, peers)
 
