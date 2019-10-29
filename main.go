@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 	"strings"
 
 	"github.com/robinmamie/Peerster/gossiper"
@@ -38,6 +39,10 @@ func main() {
 	if peersString != "" {
 		peers = strings.Split(peersString, ",")
 	}
+
+	// Create directories for file handling
+	os.Mkdir("_Downloads", 0644) // TODO magic string
+	os.Mkdir("_SharedFiles", 0644)
 
 	gossiper := gossiper.NewGossiper(gossipAddr, name, uiPort, simple, peers)
 

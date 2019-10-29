@@ -118,8 +118,9 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 		gossiper.fileChunks[fileName] = make([][]byte, 0)
 
 		for chunkNumber := 1; chunkNumber <= totalChunks; chunkNumber++ {
-			// Send chunks request
+			// Send chunks request & reset hop limit
 			request.HashValue = metaFile[files.SHA256Size*(chunkNumber-1) : files.SHA256Size*chunkNumber]
+			request.HopLimit = hopLimit
 			gossiper.handleDataRequest(request)
 			printFileDownloadInformation(request, fileName, chunkNumber)
 			reply := gossiper.waitForValidDataReply(request, fileHash)
@@ -147,8 +148,6 @@ func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, f
 			if receivedHash == chunkHash && reply.Origin == request.Destination {
 				return reply
 			}
-			fmt.Println(receivedHash)
-			fmt.Println(fileHash)
 		}
 	}
 }
