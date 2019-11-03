@@ -2,7 +2,6 @@ package files
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -73,7 +72,7 @@ func createMetaFile(file []byte, fileSize int) ([]byte, []byte, [][]byte) {
 		sums = append(sums, sum[:]...)
 	}
 	metaHash := sha256.Sum256(sums)
-	fmt.Println(fmt.Sprintf("%x", metaHash))
+	// fmt.Println(fmt.Sprintf("%x", metaHash)) // Debug code to know hash
 	return sums, metaHash[:], chunks
 }
 

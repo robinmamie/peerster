@@ -95,7 +95,6 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 		return
 	}
 	gossiper.dataChannels[fileHash] = make(chan *messages.DataReply)
-	fmt.Println(gossiper.dataChannels[fileHash])
 	gossiper.handleDataRequest(request)
 	printFileDownloadInformation(request, fileName, 0)
 
@@ -140,9 +139,11 @@ func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, f
 	for {
 		select {
 		case <-ticker.C:
+			// TODO !! Print message!! Integrate to handleDataRequest
 			gossiper.handleDataRequest(request)
 		case reply := <-gossiper.dataChannels[fileHash]:
 			// Drop any message that has a non-coherent checksum, or does not come from the desired destination
+			// TODO !! If empty data, should choose another peer?
 			receivedHash := fmt.Sprintf("%x", sha256.Sum256(reply.Data))
 			if receivedHash == chunkHash && reply.Origin == request.Destination {
 				return reply
