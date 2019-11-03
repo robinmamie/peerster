@@ -79,7 +79,6 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 }
 
 func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
-	// TODO ! should also write peers?
 	// TODO !! what to do for the GUI? Other list? Same list but with GossipPacket and then the server handles the differences with a switch?
 	if gossiper.ptpMessageReachedDestination(private) {
 		fmt.Println("PRIVATE origin", private.Origin,
@@ -107,14 +106,15 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 			// TODO should abort if node does not have metafile?
 			return
 		}
+		totalChunks := len(metaFile) / files.SHA256ByteSize
 		fileMetaData := &files.FileMetadata{
 			FileName: fileName,
-			FileSize: 0, // TODO !! what to put here?
+			FileSize: totalChunks * files.ChunkSize, // Biggest possible size, will be changed when exact size known
 			MetaFile: metaFile,
 			MetaHash: reply.HashValue,
 		}
 		gossiper.indexedFiles = append(gossiper.indexedFiles, fileMetaData)
-		totalChunks := len(metaFile) / files.SHA256ByteSize
+
 		gossiper.fileChunks[fileName] = make([][]byte, 0)
 
 		for chunkNumber := 1; chunkNumber <= totalChunks; chunkNumber++ {
@@ -128,9 +128,8 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 			// Store chunk
 			gossiper.fileChunks[fileName] = append(gossiper.fileChunks[fileName], reply.Data)
 		}
-		// Reconstruct file from chunks
-		// TODO save file size here?
-		files.BuildFileFromChunks(fileName, gossiper.fileChunks[fileName])
+		// Reconstruct file from chunks and save correct size
+		fileMetaData.FileSize = files.BuildFileFromChunks(fileName, gossiper.fileChunks[fileName])
 		fmt.Println("RECONSTRUCTED file", fileName)
 	}()
 }
@@ -181,7 +180,8 @@ func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest) {
 				}
 			}
 		}
-		// If not present, send empty packet (FIXME bugged)
+		// If not present, send empty packet
+		// FIXME bugged?
 		gossiper.sendDataReply(request, nil)
 	}
 }
@@ -214,9 +214,9 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 	// TODO combine 2 interface functions (get/decrement hoplimit) in 1?
 	if ptpMessage.GetHopLimit() > 0 {
 		ptpMessage.DecrementHopLimit()
-		// It will crash if not known. It should never happen.
-		// TODO !!! What happens with the routing logic with something else than a rumour? E.g. a private message?
-		gossiper.sendGossipPacket(gossiper.routingTable[ptpMessage.GetDestination()], ptpMessage.CreatePacket())
+		if destination, ok := gossiper.routingTable[ptpMessage.GetDestination()]; ok {
+			gossiper.sendGossipPacket(destination, ptpMessage.CreatePacket())
+		}
 	}
 	return false
 }

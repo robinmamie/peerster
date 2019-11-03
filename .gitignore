@@ -2,7 +2,7 @@
 .vscode
 Peerster
 client/client
-test_1_ring.sh
-test_2_ring.sh
+file_test
+*.sh
 _SharedFiles
 _Downloads

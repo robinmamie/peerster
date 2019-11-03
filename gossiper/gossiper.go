@@ -11,7 +11,7 @@ import (
 	"github.com/robinmamie/Peerster/tools"
 )
 
-// TODO think of thread-safeness: read on maps. Add locks?
+// TODO think of thread-safeness: read on maps. Add locks? SyncMap?
 
 // Gossiper defines a peer and stores the necessary information to use it.
 type Gossiper struct {
@@ -41,6 +41,7 @@ type Gossiper struct {
 	// Routing table used for next hops
 	routingTable map[string]string
 	// Slice of indexed files
+	// TODO Could we simply map from FileHash to the MetaHash? ([]byte to []byte)
 	indexedFiles []*files.FileMetadata
 	// Lock used to synchronize writing on the vector clock and the history
 	updateMutex *sync.Mutex

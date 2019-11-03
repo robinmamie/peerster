@@ -111,16 +111,13 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 		// The request comes from the client listener, ignore
 		return
 	}
-	if val, ok := gossiper.maxIDs[rumor.Origin]; ok {
-		if rumor.ID <= val {
-			return
-		}
-		gossiper.maxIDs[rumor.Origin] = rumor.ID
-	} else {
-		gossiper.maxIDs[rumor.Origin] = rumor.ID
-		gossiper.routingTable[rumor.Origin] = address
+	if val, ok := gossiper.maxIDs[rumor.Origin]; ok && rumor.ID <= val {
+		// This is not a new RumorMessage
+		return
 	}
-	// TODO should also take 1st address into account (is it an update?)
+
+	gossiper.maxIDs[rumor.Origin] = rumor.ID
+
 	if address != gossiper.routingTable[rumor.Origin] {
 		gossiper.routingTable[rumor.Origin] = address
 	}

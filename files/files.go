@@ -26,6 +26,7 @@ type FileMetadata struct {
 
 // NewFileMetadata creates the metadata of a given file
 func NewFileMetadata(name string) (*FileMetadata, [][]byte) {
+	// TODO ! Check if file name doesn't reference folders? No ../../whatever, no slash
 	// Import file
 	file := getFileData(name)
 
@@ -78,8 +79,10 @@ func createMetaFile(file []byte, fileSize int) ([]byte, []byte, [][]byte) {
 
 func getEndIndex(i int, fileSize int) int {
 	endIndex := ChunkSize * (i + 1)
+	// Check if chunk smaller than 8KB
 	if endIndex > fileSize {
-		endIndex = fileSize - 1
+		// Not filesSize - 1, since [... : x] automatically infers "until, but not included, x"
+		endIndex = fileSize
 	}
 	return endIndex
 }
@@ -88,15 +91,13 @@ func getEndIndex(i int, fileSize int) int {
 // FileMetadata and the chunk number.
 func (fileMeta FileMetadata) ExtractCorrespondingData(i int) []byte {
 	// Import file
-	// TODO here, we should rather save the chunks somewhere, so that we do not
-	// have to reparse everything
 	file := getFileData(fileMeta.FileName)
 	endIndex := getEndIndex(i, fileMeta.FileSize)
 	return file[ChunkSize*i : endIndex]
 }
 
-// BuildFileFromChunks reconstructs a file using all data chunks.
-func BuildFileFromChunks(fileName string, chunks [][]byte) {
+// BuildFileFromChunks reconstructs a file using all data chunks, and returns the file size.
+func BuildFileFromChunks(fileName string, chunks [][]byte) int {
 
 	fileContents := make([]byte, 0)
 	for _, chunk := range chunks {
@@ -109,4 +110,5 @@ func BuildFileFromChunks(fileName string, chunks [][]byte) {
 	pathToFile := pathToFolder + "/_Downloads/" + fileName
 	err = ioutil.WriteFile(pathToFile, fileContents, 0644)
 	tools.Check(err)
+	return len(fileContents)
 }

@@ -16,7 +16,6 @@ func (gossiper *Gossiper) antiEntropy(delay uint64) {
 			if target, ok := gossiper.pickRandomPeer(); ok {
 				gossiper.sendCurrentStatus(target)
 			}
-		default: // FIXME necessary?
 		}
 	}
 }
