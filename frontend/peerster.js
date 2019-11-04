@@ -55,6 +55,14 @@ function getAllMessages() {
             }, 1000);
         }
     });
+
+    $.get("/fulldestinations", function(destinations){
+        if (destinations !== null) {
+            for (let el of destinations) {
+                $(".privateList").append(el)
+            }
+        }
+    });
 }
 
 function update() {
@@ -90,13 +98,9 @@ function update() {
     });
 
     $.get("/destinations", function(destinations){
-        $(".privateList").text("")
         if (destinations !== null) {
             for (let el of destinations) {
                 $(".privateList").append(el)
-                if (el === currDestination) {
-                    el.style.fontWeight = 'bold';
-                }
             }
         }
     });
