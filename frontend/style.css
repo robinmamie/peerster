@@ -29,11 +29,22 @@ body {
     clear: both;
 }
 
-.messages, .nodeList {
-    height: 400px;
+.messages, .nodeList, .privateList {
     overflow: scroll;
     background-color: aliceblue;
     border: 2px solid black;
+}
+
+.messages {
+    height: 600px;
+}
+
+.nodeList {
+    height: 200px;
+}
+
+.privateList {
+    height: 250px;
 }
 
 #messageInput {

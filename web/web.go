@@ -27,6 +27,7 @@ func InitWebServer(g *gossiper.Gossiper, uiPort string) {
 	http.HandleFunc("/chat", chatHandler)
 	http.HandleFunc("/fullchat", fullChatHandler)
 	http.HandleFunc("/peers", peerHandler)
+	http.HandleFunc("/destinations", destinationHandler)
 	guiPort := 8080
 	for {
 		serverAddress := ":" + strconv.Itoa(guiPort)
@@ -103,6 +104,29 @@ func fullChatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func privateChatHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		//for peers, msgList := range gossip.PrivateMessages {
+		//}
+
+	case "POST":
+		err := r.ParseForm()
+		tools.Check(err)
+		conn, err := net.Dial("udp4", localAddress)
+		tools.Check(err)
+
+		packet := messages.Message{
+			Text: r.PostForm["msg"][0],
+		}
+		packetBytes, err := protobuf.Encode(&packet)
+		tools.Check(err)
+
+		conn.Write(packetBytes)
+		conn.Close()
+	}
+}
+
 func peerHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -124,5 +148,26 @@ func peerHandler(w http.ResponseWriter, r *http.Request) {
 		tools.Check(err)
 		newPeer := r.PostForm["node"][0]
 		gossip.AddPeer(newPeer)
+	}
+}
+
+var destinationsSaved int = 0
+
+func destinationHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		allDestinations := gossip.DestinationList
+		var destinations []string = nil
+		for _, d := range allDestinations[destinationsSaved:] {
+			dest := "<p id=\"msg\" onclick=\"displayPrivate(this)\">" + d + "</p>"
+			destinations = append(destinations, dest)
+		}
+		destinationsSaved = len(destinations)
+		peersJSON, err := json.Marshal(destinations)
+		tools.Check(err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(peersJSON)
 	}
 }

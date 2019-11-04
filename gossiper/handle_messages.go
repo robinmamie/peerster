@@ -3,7 +3,6 @@ package gossiper
 import (
 	"crypto/sha256"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/robinmamie/Peerster/files"
@@ -12,10 +11,10 @@ import (
 )
 
 func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
-	fmt.Println("SIMPLE MESSAGE origin", simple.OriginalName,
-		"from", simple.RelayPeerAddr,
-		"contents", simple.Contents)
-	gossiper.printPeers()
+	//fmt.Println("SIMPLE MESSAGE origin", simple.OriginalName,
+	//	"from", simple.RelayPeerAddr,
+	//	"contents", simple.Contents)
+	//gossiper.printPeers()
 
 	// Send packet to all other known peers if we are in simple mode
 	if gossiper.simple {
@@ -27,21 +26,21 @@ func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address stri
 	fmt.Println("RUMOR origin", rumor.Origin, "from",
 		address, "ID", rumor.ID, "contents",
 		rumor.Text)
-	gossiper.printPeers()
+	//gossiper.printPeers()
 
 	gossiper.receivedRumor(rumor, address)
 	gossiper.sendCurrentStatus(address)
 }
 
 func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address string) {
-	fmt.Print("STATUS from ", address)
-	for _, s := range status.Want {
-		fmt.Print(" peer ", s.Identifier, " nextID ", s.NextID)
-	}
-	fmt.Println()
-	gossiper.printPeers()
+	//fmt.Print("STATUS from ", address)
+	//for _, s := range status.Want {
+	//	fmt.Print(" peer ", s.Identifier, " nextID ", s.NextID)
+	//}
+	//fmt.Println()
+	//gossiper.printPeers()
 	if status.IsEqual(gossiper.vectorClock) {
-		fmt.Println("IN SYNC WITH", address)
+		//fmt.Println("IN SYNC WITH", address)
 	}
 
 	// Wake up correct subroutine if status received
@@ -82,6 +81,9 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 	// TODO !! what to do for the GUI? Other list? Same list but with GossipPacket and then the server handles the differences with a switch?
 	if gossiper.ptpMessageReachedDestination(private) {
+
+		gossiper.PrivateMessages[private.Origin] = append(gossiper.PrivateMessages[private.Origin], private)
+
 		fmt.Println("PRIVATE origin", private.Origin,
 			"hop-limit", private.HopLimit,
 			"contents", private.Text)
@@ -218,8 +220,8 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 	// TODO combine 2 interface functions (get/decrement hoplimit) in 1?
 	if ptpMessage.GetHopLimit() > 0 {
 		ptpMessage.DecrementHopLimit()
-		if destination, ok := gossiper.routingTable.Load(ptpMessage.GetDestination()); ok {
-			gossiper.sendGossipPacket(destination.(string), ptpMessage.CreatePacket())
+		if destination, ok := gossiper.routingTable[ptpMessage.GetDestination()]; ok {
+			gossiper.sendGossipPacket(destination, ptpMessage.CreatePacket())
 		}
 	}
 	return false
@@ -227,5 +229,5 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 
 // printPeers prints the list of known peers.
 func (gossiper *Gossiper) printPeers() {
-	fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
+	//fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
 }

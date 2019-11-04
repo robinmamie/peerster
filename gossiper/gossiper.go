@@ -30,6 +30,7 @@ type Gossiper struct {
 	// TODO find a way to combine them?
 	msgHistory      map[messages.PeerStatus]*messages.RumorMessage
 	allMessages     []*messages.RumorMessage
+	PrivateMessages map[string][]*messages.PrivateMessage
 	latestMessageID int
 	fileChunks      map[string][][]byte
 	// ID information
@@ -37,7 +38,8 @@ type Gossiper struct {
 	maxIDs      map[string]uint32
 	ownID       uint32
 	// Routing table used for next hops
-	routingTable sync.Map //map[string]string
+	routingTable    map[string]string
+	DestinationList []string
 	// Slice of indexed files
 	// TODO Could we simply map from FileHash to the MetaHash? ([]byte to []byte)
 	indexedFiles []*files.FileMetadata
@@ -81,14 +83,16 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		// Map between an identifier and a list of RumorMessages
 		msgHistory:      make(map[messages.PeerStatus]*messages.RumorMessage),
 		allMessages:     make([]*messages.RumorMessage, 0),
+		PrivateMessages: make(map[string][]*messages.PrivateMessage),
 		latestMessageID: 0,
 		fileChunks:      make(map[string][][]byte),
 		vectorClock:     make(map[string]uint32),
 		maxIDs:          make(map[string]uint32),
 		ownID:           1,
-		//routingTable:    make(map[string]string),
-		indexedFiles: make([]*files.FileMetadata, 0),
-		updateMutex:  &sync.Mutex{},
+		routingTable:    make(map[string]string),
+		DestinationList: make([]string, 0),
+		indexedFiles:    make([]*files.FileMetadata, 0),
+		updateMutex:     &sync.Mutex{},
 	}
 }
 

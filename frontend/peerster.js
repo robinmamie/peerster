@@ -58,6 +58,7 @@ function getAllMessages() {
 }
 
 function update() {
+
     $.get("/id", function(id){
         const name = id[0]
         const ip = id[1]
@@ -65,7 +66,8 @@ function update() {
         $(".nodeName").text(name)
         $(".nodeIP").text(ip)
         $(".clientPort").text(port)
-    })
+    });
+
     $.get("/chat", function(messages){
         if (messages !== null) {
             beep()
@@ -77,6 +79,7 @@ function update() {
             }, 1000);
         }
     });
+
     $.get("/peers", function(peers){
         $(".nodeList").text("")
         if (peers !== null) {
@@ -84,7 +87,35 @@ function update() {
                 $(".nodeList").append(el)
             }
         }
-    });   
+    });
+
+    $.get("/destinations", function(destinations){
+        $(".privateList").text("")
+        if (destinations !== null) {
+            for (let el of destinations) {
+                $(".privateList").append(el)
+                if (el === currDestination) {
+                    el.style.fontWeight = 'bold';
+                }
+            }
+        }
+    });
+}
+
+var currDestination = null;
+
+function displayPrivate(destination) {
+
+    if (currDestination) {
+        currDestination.style.fontWeight = 'normal';
+    }
+    if (destination !== currDestination) {
+        currDestination = destination;
+        destination.style.fontWeight = 'bold';
+    } else {
+        currDestination = null;
+    }
+    //var dest = destination.innerHTML
 }
 
 function beep() {

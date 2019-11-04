@@ -35,7 +35,7 @@ func (gossiper *Gossiper) listenClient() {
 }
 
 func (gossiper *Gossiper) createSimple(message *messages.Message) {
-	fmt.Println("CLIENT MESSAGE", message.Text)
+	//fmt.Println("CLIENT MESSAGE", message.Text)
 	simple := &messages.SimpleMessage{
 		OriginalName:  gossiper.Name,
 		RelayPeerAddr: gossiper.Address,
