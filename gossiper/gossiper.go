@@ -11,8 +11,6 @@ import (
 	"github.com/robinmamie/Peerster/tools"
 )
 
-// TODO think of thread-safeness: read on maps. Add locks? SyncMap?
-
 // Gossiper defines a peer and stores the necessary information to use it.
 type Gossiper struct {
 	// Net information
@@ -39,7 +37,7 @@ type Gossiper struct {
 	maxIDs      map[string]uint32
 	ownID       uint32
 	// Routing table used for next hops
-	routingTable map[string]string
+	routingTable sync.Map //map[string]string
 	// Slice of indexed files
 	// TODO Could we simply map from FileHash to the MetaHash? ([]byte to []byte)
 	indexedFiles []*files.FileMetadata
@@ -88,9 +86,9 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		vectorClock:     make(map[string]uint32),
 		maxIDs:          make(map[string]uint32),
 		ownID:           1,
-		routingTable:    make(map[string]string),
-		indexedFiles:    make([]*files.FileMetadata, 0),
-		updateMutex:     &sync.Mutex{},
+		//routingTable:    make(map[string]string),
+		indexedFiles: make([]*files.FileMetadata, 0),
+		updateMutex:  &sync.Mutex{},
 	}
 }
 

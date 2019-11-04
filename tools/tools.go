@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"os"
 )
 
 // UDPSize is the maximum number of bytes sent by a UDP message
@@ -18,7 +19,9 @@ func AddressToString(address *net.UDPAddr) string {
 // Check panics if the error given is not nil.
 func Check(err error) {
 	if err != nil {
-		log.Fatal(err)
+		os.Exit(1)
+		// TODO replace
+		//log.Fatal(err)
 	}
 }
 
@@ -46,4 +49,9 @@ func SendPacketBytes(connection *net.UDPConn, address string, packetBytes []byte
 		log.Fatal(bytes, "bytes were sent instead of", len(packetBytes),
 			"bytes.")
 	}
+}
+
+// BytesToHexString converts a hash from its byte representation to a string.
+func BytesToHexString(hash []byte) string {
+	return fmt.Sprintf("%x", hash)
 }

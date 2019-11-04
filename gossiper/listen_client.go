@@ -55,7 +55,6 @@ func (gossiper *Gossiper) createRequest(message *messages.Message) {
 }
 
 func (gossiper *Gossiper) indexFile(fileName string) {
-	// TODO Should we print something when indexing?
 	fileMetaData, chunks := files.NewFileMetadata(fileName)
 	gossiper.indexedFiles = append(gossiper.indexedFiles, fileMetaData)
 	// Store chunks in gossiper

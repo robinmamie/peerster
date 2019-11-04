@@ -112,14 +112,14 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 		return
 	}
 	if val, ok := gossiper.maxIDs[rumor.Origin]; ok && rumor.ID <= val {
-		// This is not a new RumorMessage
+		// This is not a newer RumorMessage
 		return
 	}
 
 	gossiper.maxIDs[rumor.Origin] = rumor.ID
 
-	if address != gossiper.routingTable[rumor.Origin] {
-		gossiper.routingTable[rumor.Origin] = address
+	if dest, ok := gossiper.routingTable.Load(rumor.Origin); !ok || address != dest.(string) {
+		gossiper.routingTable.Store(rumor.Origin, address)
 	}
 	if rumor.Text != "" {
 		fmt.Println("DSDV", rumor.Origin, address)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/robinmamie/Peerster/files"
 	"github.com/robinmamie/Peerster/messages"
+	"github.com/robinmamie/Peerster/tools"
 )
 
 func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
@@ -89,7 +90,7 @@ func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 
 func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest, fileName string) {
 
-	fileHash := fmt.Sprintf("%x", request.HashValue) // TODO modularize byte to hex string
+	fileHash := tools.BytesToHexString(request.HashValue)
 	// Avoid several downloads of the same file
 	if _, ok := gossiper.dataChannels[fileHash]; ok {
 		return
@@ -130,12 +131,13 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 		// Reconstruct file from chunks and save correct size
 		fileMetaData.FileSize = files.BuildFileFromChunks(fileName, gossiper.fileChunks[fileName])
 		fmt.Println("RECONSTRUCTED file", fileName)
+		// TODO !! delete channel entry in list gossiper.fileChunks
 	}()
 }
 
 func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, fileHash string) *messages.DataReply {
 	ticker := time.NewTicker(5 * time.Second)
-	chunkHash := fmt.Sprintf("%x", request.HashValue)
+	chunkHashStr := tools.BytesToHexString(request.HashValue)
 	for {
 		select {
 		case <-ticker.C:
@@ -144,8 +146,9 @@ func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, f
 		case reply := <-gossiper.dataChannels[fileHash]:
 			// Drop any message that has a non-coherent checksum, or does not come from the desired destination
 			// TODO !! If empty data, should choose another peer?
-			receivedHash := fmt.Sprintf("%x", sha256.Sum256(reply.Data))
-			if receivedHash == chunkHash && reply.Origin == request.Destination {
+			receivedHash := sha256.Sum256(reply.Data)
+			receivedHashStr := tools.BytesToHexString(receivedHash[:])
+			if receivedHashStr == chunkHashStr && reply.Origin == request.Destination {
 				return reply
 			}
 		}
@@ -164,17 +167,17 @@ func printFileDownloadInformation(request *messages.DataRequest, fileName string
 
 func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest) {
 	if gossiper.ptpMessageReachedDestination(request) {
-		requestedHash := fmt.Sprintf("%x", request.HashValue)
+		requestedHash := tools.BytesToHexString(request.HashValue)
 		// Send corresponding DataReply back
 		for _, fileMetadata := range gossiper.indexedFiles {
-			if fmt.Sprintf("%x", fileMetadata.MetaHash) == requestedHash {
+			if tools.BytesToHexString(fileMetadata.MetaHash) == requestedHash {
 				gossiper.sendDataReply(request, fileMetadata.MetaFile)
 				return
 			}
 			chunks := gossiper.fileChunks[fileMetadata.FileName]
 			numberOfChunks := len(chunks)
 			for i := 0; i < numberOfChunks; i++ {
-				currentHash := fmt.Sprintf("%x", fileMetadata.MetaFile[files.SHA256ByteSize*i:files.SHA256ByteSize*(i+1)])
+				currentHash := tools.BytesToHexString(fileMetadata.MetaFile[files.SHA256ByteSize*i : files.SHA256ByteSize*(i+1)])
 				if currentHash == requestedHash {
 					gossiper.sendDataReply(request, chunks[i])
 					return
@@ -215,8 +218,8 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 	// TODO combine 2 interface functions (get/decrement hoplimit) in 1?
 	if ptpMessage.GetHopLimit() > 0 {
 		ptpMessage.DecrementHopLimit()
-		if destination, ok := gossiper.routingTable[ptpMessage.GetDestination()]; ok {
-			gossiper.sendGossipPacket(destination, ptpMessage.CreatePacket())
+		if destination, ok := gossiper.routingTable.Load(ptpMessage.GetDestination()); ok {
+			gossiper.sendGossipPacket(destination.(string), ptpMessage.CreatePacket())
 		}
 	}
 	return false
