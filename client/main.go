@@ -26,7 +26,7 @@ func main() {
 	flag.StringVar(&textMsg, "msg", "", "message to be sent; if the -dest flag is present, this is a private message, otherwise it's a rumor message")
 	flag.StringVar(&dest, "dest", "", "destination for the private message; can be omitted")
 	flag.StringVar(&file, "file", "", "file to be indexed by the gossiper")
-	flag.StringVar(&request, "request", "", "request a chunk or metafile of this hash") // TODO !! could request a chunk WTF?? Ask on forum!
+	flag.StringVar(&request, "request", "", "request a chunk or metafile of this hash") // TODO could request a chunk WTF?? Ask on forum!
 	flag.Parse()
 
 	checkFlags(textMsg, dest, file, request)

@@ -23,24 +23,20 @@ func (gossiper *Gossiper) antiEntropy(delay uint64) {
 // routeRumor periodically sends an empty rumor message so that neighbors do not
 // forget about this node.
 func (gossiper *Gossiper) routeRumor(rtimer uint64) {
-	// Startup route rumors
-	for _, p := range gossiper.Peers {
-		gossiper.sendRouteRumor(p)
-	}
+	// Startup route rumor
+	gossiper.sendRouteRumor()
 
 	// Periodic route rumors
 	ticker := time.NewTicker(time.Duration(rtimer) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
-			if target, ok := gossiper.pickRandomPeer(); ok {
-				gossiper.sendRouteRumor(target)
-			}
+			gossiper.sendRouteRumor()
 		}
 	}
 }
 
-func (gossiper *Gossiper) sendRouteRumor(target string) {
+func (gossiper *Gossiper) sendRouteRumor() {
 	packet := &messages.GossipPacket{
 		Rumor: &messages.RumorMessage{
 			Origin: gossiper.Name,
@@ -51,5 +47,5 @@ func (gossiper *Gossiper) sendRouteRumor(target string) {
 	gossiper.updateMutex.Lock()
 	gossiper.ownID++
 	gossiper.updateMutex.Unlock()
-	gossiper.receivedRumor(packet.Rumor, target)
+	gossiper.receivedRumor(packet.Rumor, "")
 }

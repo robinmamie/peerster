@@ -55,7 +55,7 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 			select {
 			case <-timeout.C:
 				if target, ok := gossiper.pickRandomPeer(); ok {
-					defer gossiper.rumormonger(rumor, target)
+					gossiper.rumormonger(rumor, target)
 				}
 				return
 
@@ -69,7 +69,7 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 						if gossiper.compareVectors(status, target) && tools.FlipCoin() {
 							if target, ok := gossiper.pickRandomPeer(); ok {
 								fmt.Println("FLIPPED COIN sending rumor to", target)
-								defer gossiper.rumormonger(rumor, target)
+								gossiper.rumormonger(rumor, target)
 							}
 						}
 						return
