@@ -58,7 +58,7 @@ func (gossiper *Gossiper) indexFile(fileName string) {
 	gossiper.indexedFiles = append(gossiper.indexedFiles, fileMetaData)
 	// Store chunks in gossiper
 	if chunks != nil {
-		gossiper.fileChunks[fileName] = chunks
+		gossiper.fileChunks.Store(fileName, chunks)
 	}
 }
 
@@ -85,8 +85,6 @@ func (gossiper *Gossiper) createRumor(message *messages.Message) {
 		Text:   message.Text,
 	}
 	// TODO use another lock?
-	gossiper.updateMutex.Lock()
-	gossiper.ownID++
-	gossiper.updateMutex.Unlock()
+	gossiper.incrementOwnID()
 	gossiper.receivedRumor(rumor, gossiper.Address)
 }

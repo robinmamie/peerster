@@ -23,16 +23,16 @@ type Gossiper struct {
 	simple bool
 	Peers  []string
 	// Channels used to communicate between threads
-	statusWaiting map[string]chan *messages.StatusPacket
-	expected      map[string]chan bool
-	dataChannels  map[string]chan *messages.DataReply
+	statusWaiting sync.Map //map[string]chan *messages.StatusPacket
+	expected      sync.Map //map[string]chan bool
+	dataChannels  sync.Map //map[string]chan *messages.DataReply
 	// Message history
 	// TODO find a way to combine them?
-	msgHistory      map[messages.PeerStatus]*messages.RumorMessage
+	msgHistory      sync.Map //map[messages.PeerStatus]*messages.RumorMessage
 	allMessages     []*messages.RumorMessage
 	PrivateMessages sync.Map
 	latestMessageID int
-	fileChunks      map[string][][]byte
+	fileChunks      sync.Map //map[string][][]byte
 	// ID information
 	vectorClock *messages.StatusPacket
 	maxIDs      sync.Map
@@ -62,41 +62,34 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 	tools.Check(err)
 
 	// Channels used to communicate between routines during rumormongering.
-	statusWaiting := make(map[string](chan *messages.StatusPacket))
-	expected := make(map[string]chan bool)
-	for _, p := range peers {
-		statusWaiting[p] = make(chan *messages.StatusPacket)
-		expected[p] = make(chan bool)
-	}
 	emptyStatus := &messages.StatusPacket{
 		Want: nil,
 	}
 
-	return &Gossiper{
-		Address:       address,
-		conn:          udpConn,
-		cliConn:       cliConn,
-		UIPort:        uiPort,
-		Name:          name,
-		simple:        simple,
-		Peers:         peers,
-		statusWaiting: statusWaiting,
-		expected:      expected,
-		dataChannels:  make(map[string]chan *messages.DataReply),
-		// Map between an identifier and a list of RumorMessages
-		msgHistory:  make(map[messages.PeerStatus]*messages.RumorMessage),
-		allMessages: make([]*messages.RumorMessage, 0),
-		//PrivateMessages: make(map[string][]*messages.PrivateMessage),
+	gossiper := &Gossiper{
+		Address:         address,
+		conn:            udpConn,
+		cliConn:         cliConn,
+		UIPort:          uiPort,
+		Name:            name,
+		simple:          simple,
+		Peers:           peers,
+		allMessages:     make([]*messages.RumorMessage, 0),
 		latestMessageID: 0,
-		fileChunks:      make(map[string][][]byte),
 		vectorClock:     emptyStatus,
-		//maxIDs:          make(map[string]uint32),
-		ownID: 1,
-		//routingTable:    make(map[string]string),
+		ownID:           1,
 		DestinationList: make([]string, 0),
 		indexedFiles:    make([]*files.FileMetadata, 0),
 		updateMutex:     &sync.Mutex{},
 	}
+
+	// Create maps for inter-thread communications.
+	for _, p := range peers {
+		gossiper.statusWaiting.Store(p, make(chan *messages.StatusPacket))
+		gossiper.expected.Store(p, make(chan bool))
+	}
+
+	return gossiper
 }
 
 // Run starts the node and runs it.
@@ -132,4 +125,10 @@ func (gossiper *Gossiper) getCurrentStatus() *messages.GossipPacket {
 		Status: gossiper.vectorClock,
 	}
 	return &packet
+}
+
+func (gossiper *Gossiper) incrementOwnID() {
+	gossiper.updateMutex.Lock()
+	gossiper.ownID++
+	gossiper.updateMutex.Unlock()
 }

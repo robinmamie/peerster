@@ -16,13 +16,13 @@ func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage, address st
 		Identifier: rumor.Origin,
 		NextID:     rumor.ID,
 	}
-	_, present := gossiper.msgHistory[rumorStatus]
+	_, present := gossiper.msgHistory.Load(rumorStatus)
 
 	// New rumor detected
 	if !present {
 		// Add rumor to history and update vector clock atomically
 		gossiper.updateMutex.Lock()
-		gossiper.msgHistory[rumorStatus] = rumor
+		gossiper.msgHistory.Store(rumorStatus, rumor)
 
 		// Do not display route rumors on the GUI
 		if rumor.Text != "" {
@@ -50,6 +50,10 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 	go func() {
 		// Set timeout and listen to acknowledgement channel
 		timeout := time.NewTicker(10 * time.Second)
+		statusChannelRaw, _ := gossiper.statusWaiting.Load(target)
+		statusChannel := statusChannelRaw.(chan *messages.StatusPacket)
+		expectedRaw, _ := gossiper.expected.Load(target)
+		expected := expectedRaw.(chan bool)
 		for {
 			select {
 			case <-timeout.C:
@@ -58,11 +62,11 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 				}
 				return
 
-			case status := <-gossiper.statusWaiting[target]:
+			case status := <-statusChannel:
 				for _, sp := range status.Want {
 					if sp.Identifier == packet.Rumor.Origin && sp.NextID > packet.Rumor.ID {
 						// Announce that the package is expected
-						gossiper.expected[target] <- true
+						expected <- true
 						// We have to compare vectors first, in case we/they have somthing interesting.
 						// We flip the coin iff we are level. Otherwise, there is no mention of any coin in the specs.
 						if gossiper.compareVectors(status, target) && tools.FlipCoin() {
@@ -90,7 +94,7 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 				for stillPresent {
 					status.NextID++
 					gossiper.vectorClock.Want[i].NextID++
-					_, stillPresent = gossiper.msgHistory[status]
+					_, stillPresent = gossiper.msgHistory.Load(status)
 				}
 			}
 			// else do not update vector clock, will be done once the sequence is completed
@@ -176,7 +180,9 @@ func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target st
 		Identifier: origin,
 		NextID:     id,
 	}
-	gossiper.rumormonger(gossiper.msgHistory[ps], target)
+	oldRumorRaw, _ := gossiper.msgHistory.Load(ps)
+	oldRumor := oldRumorRaw.(*messages.RumorMessage)
+	gossiper.rumormonger(oldRumor, target)
 }
 
 // sendCurrentStatus sends the current vector clock as a GossipPacket to the

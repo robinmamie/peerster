@@ -75,7 +75,7 @@ func checkFlags(textMsg string, dest string, file string, request string) {
 	// Request defined without file name or destination
 	impossibleCombination = impossibleCombination || (requestDefined && (!fileDefined || !destDefined))
 	// Destintation defined when only file defined
-	impossibleCombination = (fileDefined && destDefined && !requestDefined)
+	impossibleCombination = impossibleCombination || (fileDefined && destDefined && !requestDefined)
 
 	panicIfTrue(impossibleCombination, "ERROR (Bad argument combination)")
 }

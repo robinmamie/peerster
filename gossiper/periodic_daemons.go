@@ -44,9 +44,7 @@ func (gossiper *Gossiper) sendRouteRumor() {
 			Text:   "",
 		},
 	}
-	gossiper.updateMutex.Lock()
-	gossiper.ownID++
-	gossiper.updateMutex.Unlock()
+	gossiper.incrementOwnID()
 	// Add our own address to the routing table.
 	gossiper.receivedRumor(packet.Rumor, gossiper.Address)
 }

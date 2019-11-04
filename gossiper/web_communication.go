@@ -24,8 +24,8 @@ func (gossiper *Gossiper) GetRumorMessagesList() []*messages.RumorMessage {
 func (gossiper *Gossiper) AddPeer(address string) {
 	gossiper.updateMutex.Lock()
 	gossiper.Peers = append(gossiper.Peers, address)
-	// TODO modularize this (see constructor)
-	gossiper.statusWaiting[address] = make(chan *messages.StatusPacket)
-	gossiper.expected[address] = make(chan bool)
 	gossiper.updateMutex.Unlock()
+	// TODO modularize this (see constructor)
+	gossiper.statusWaiting.Store(address, make(chan *messages.StatusPacket))
+	gossiper.expected.Store(address, make(chan bool))
 }
