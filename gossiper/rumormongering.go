@@ -46,7 +46,6 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 		Rumor: rumor,
 	}
 	gossiper.sendGossipPacket(target, packet)
-	//fmt.Println("MONGERING with", target)
 
 	go func() {
 		// Set timeout and listen to acknowledgement channel
@@ -68,7 +67,6 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 						// We flip the coin iff we are level. Otherwise, there is no mention of any coin in the specs.
 						if gossiper.compareVectors(status, target) && tools.FlipCoin() {
 							if target, ok := gossiper.pickRandomPeer(); ok {
-								//fmt.Println("FLIPPED COIN sending rumor to", target)
 								gossiper.rumormonger(rumor, target)
 							}
 						}

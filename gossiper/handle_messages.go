@@ -11,11 +11,6 @@ import (
 )
 
 func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
-	//fmt.Println("SIMPLE MESSAGE origin", simple.OriginalName,
-	//	"from", simple.RelayPeerAddr,
-	//	"contents", simple.Contents)
-	//gossiper.printPeers()
-
 	// Send packet to all other known peers if we are in simple mode
 	if gossiper.simple {
 		gossiper.sendSimple(simple)
@@ -26,22 +21,12 @@ func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address stri
 	fmt.Println("RUMOR origin", rumor.Origin, "from",
 		address, "ID", rumor.ID, "contents",
 		rumor.Text)
-	//gossiper.printPeers()
 
 	gossiper.receivedRumor(rumor, address)
 	gossiper.sendCurrentStatus(address)
 }
 
 func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address string) {
-	//fmt.Print("STATUS from ", address)
-	//for _, s := range status.Want {
-	//	fmt.Print(" peer ", s.Identifier, " nextID ", s.NextID)
-	//}
-	//fmt.Println()
-	//gossiper.printPeers()
-	if status.IsEqual(gossiper.vectorClock) {
-		//fmt.Println("IN SYNC WITH", address)
-	}
 
 	// Wake up correct subroutine if status received
 	unexpected := true
@@ -225,9 +210,4 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 		}
 	}
 	return false
-}
-
-// printPeers prints the list of known peers.
-func (gossiper *Gossiper) printPeers() {
-	//fmt.Println("PEERS", strings.Join(gossiper.Peers, ","))
 }
