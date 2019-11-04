@@ -5,7 +5,6 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	"os"
 )
 
 // UDPSize is the maximum number of bytes sent by a UDP message
@@ -19,9 +18,7 @@ func AddressToString(address *net.UDPAddr) string {
 // Check panics if the error given is not nil.
 func Check(err error) {
 	if err != nil {
-		os.Exit(1)
-		// TODO replace
-		//log.Fatal(err)
+		log.Fatal(err)
 	}
 }
 

@@ -44,7 +44,7 @@ func getFileData(name string) []byte {
 	pathToExecutable, err := os.Executable()
 	tools.Check(err)
 	pathToFolder := filepath.Dir(pathToExecutable)
-	// We assume that the name complies with the specs (only file name).
+	// TODO We assume that the name complies with the specs (only file name).
 	pathToFile := pathToFolder + "/_SharedFiles/" + name
 
 	file, err := os.Open(pathToFile)
@@ -99,6 +99,7 @@ func (fileMeta FileMetadata) ExtractCorrespondingData(i int) []byte {
 func BuildFileFromChunks(fileName string, chunks [][]byte) int {
 
 	fileContents := make([]byte, 0)
+	// TODO use metafile to iterate over hashes, and verify if contents are correct (2 loops)
 	for _, chunk := range chunks {
 		fileContents = append(fileContents, chunk...)
 	}
@@ -106,6 +107,7 @@ func BuildFileFromChunks(fileName string, chunks [][]byte) int {
 	pathToExecutable, err := os.Executable()
 	tools.Check(err)
 	pathToFolder := filepath.Dir(pathToExecutable)
+	// TODO We assume that the name complies with the specs (only file name).
 	pathToFile := pathToFolder + "/_Downloads/" + fileName
 	err = ioutil.WriteFile(pathToFile, fileContents, 0644)
 	tools.Check(err)

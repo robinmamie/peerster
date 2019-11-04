@@ -84,7 +84,6 @@ func (gossiper *Gossiper) createRumor(message *messages.Message) {
 		ID:     gossiper.ownID,
 		Text:   message.Text,
 	}
-	// TODO use another lock?
 	gossiper.incrementOwnID()
 	gossiper.receivedRumor(rumor, gossiper.Address)
 }

@@ -29,7 +29,7 @@ type Gossiper struct {
 	// Message history
 	msgHistory      sync.Map
 	allMessages     []*messages.RumorMessage // Used for the GUI
-	PrivateMessages sync.Map
+	PrivateMessages sync.Map                 // Used for the GUI
 	latestMessageID int
 	fileChunks      sync.Map
 	// ID information
@@ -119,11 +119,10 @@ func (gossiper *Gossiper) pickRandomPeer() (string, bool) {
 // getCurrentStatus dynamically creates this node's vector clock as a
 // GossipPacket.
 func (gossiper *Gossiper) getCurrentStatus() *messages.GossipPacket {
-	// TODO suboptimal, will take too much time!
-	packet := messages.GossipPacket{
+	packet := &messages.GossipPacket{
 		Status: gossiper.vectorClock,
 	}
-	return &packet
+	return packet
 }
 
 func (gossiper *Gossiper) incrementOwnID() {

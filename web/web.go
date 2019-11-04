@@ -83,6 +83,9 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		packet := messages.Message{
 			Text: r.PostForm["msg"][0],
 		}
+		if dest, ok := r.PostForm["dest"]; ok {
+			packet.Destination = &dest[0]
+		}
 		packetBytes, err := protobuf.Encode(&packet)
 		tools.Check(err)
 
@@ -102,29 +105,6 @@ func fullChatHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(msgListJSON)
-	}
-}
-
-func privateChatHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		//for peers, msgList := range gossip.PrivateMessages {
-		//}
-
-	case "POST":
-		err := r.ParseForm()
-		tools.Check(err)
-		conn, err := net.Dial("udp4", localAddress)
-		tools.Check(err)
-
-		packet := messages.Message{
-			Text: r.PostForm["msg"][0],
-		}
-		packetBytes, err := protobuf.Encode(&packet)
-		tools.Check(err)
-
-		conn.Write(packetBytes)
-		conn.Close()
 	}
 }
 

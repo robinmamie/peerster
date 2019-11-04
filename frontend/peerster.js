@@ -29,7 +29,11 @@ function sendMessage() {
     if (msg === "") {
         return
     }
-    $.post("/chat", {msg: msg})
+    if (currDestination) {
+        $.post("/chat", {msg: msg, dest: currDestination.innerHTML})
+    } else {
+        $.post("/chat", {msg: msg})
+    }
     $('#messageInput').val('')
     update()
 }
@@ -109,17 +113,18 @@ function update() {
 var currDestination = null;
 
 function displayPrivate(destination) {
-
+    // TODO could also open a dialog with only 1 field: message, since we know the destination.
     if (currDestination) {
         currDestination.style.fontWeight = 'normal';
     }
     if (destination !== currDestination) {
         currDestination = destination;
         destination.style.fontWeight = 'bold';
+        $("#messageInput").css("background-color","#FAA");
     } else {
+        $("#messageInput").css("background-color","#FFF");
         currDestination = null;
     }
-    //var dest = destination.innerHTML
 }
 
 function beep() {

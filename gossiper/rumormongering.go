@@ -87,7 +87,6 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 
 // updateVectorClock updates the internal vector clock.
 func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorStatus messages.PeerStatus) {
-	// TODO create own package
 	for i, ps := range gossiper.vectorClock.Want {
 		if ps.Identifier == rumor.Origin {
 			if ps.NextID == rumor.ID {
@@ -126,7 +125,7 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 	gossiper.maxIDs.Store(rumor.Origin, rumor.ID)
 
 	if _, ok := gossiper.routingTable.Load(rumor.Origin); !ok {
-		// Add destination to list
+		// For GUI: Add destination to list
 		gossiper.DestinationList = append(gossiper.DestinationList, rumor.Origin)
 	}
 

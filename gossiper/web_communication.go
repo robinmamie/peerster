@@ -25,7 +25,7 @@ func (gossiper *Gossiper) AddPeer(address string) {
 	gossiper.updateMutex.Lock()
 	gossiper.Peers = append(gossiper.Peers, address)
 	gossiper.updateMutex.Unlock()
-	// TODO modularize this (see constructor)
+
 	gossiper.statusWaiting.Store(address, make(chan *messages.StatusPacket))
 	gossiper.expected.Store(address, make(chan bool))
 }

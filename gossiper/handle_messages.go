@@ -94,11 +94,11 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 
 	go func() {
 		reply := gossiper.waitForValidDataReply(request, fileHash, fileName, 0)
-		metaFile := reply.Data
-		if metaFile == nil {
-			// TODO should abort if node does not have metafile?
+		if reply == nil || reply.Data == nil {
+			// The destination does not have the file, simply terminate
 			return
 		}
+		metaFile := reply.Data
 		totalChunks := len(metaFile) / files.SHA256ByteSize
 		fileMetaData := &files.FileMetadata{
 			FileName: fileName,
@@ -111,18 +111,21 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 		gossiper.fileChunks.Store(fileName, make([][]byte, 0))
 
 		for chunkNumber := 1; chunkNumber <= totalChunks; chunkNumber++ {
+			// TODO handle chunks already downloaded
 			// Send chunks request & reset hop limit
 			request.HashValue = metaFile[files.SHA256ByteSize*(chunkNumber-1) : files.SHA256ByteSize*chunkNumber]
 			request.HopLimit = hopLimit
 			gossiper.handleDataRequest(request, fileName, chunkNumber)
 			reply := gossiper.waitForValidDataReply(request, fileHash, fileName, chunkNumber)
-
-			// Store chunk
-			fileChunksRaw, _ := gossiper.fileChunks.Load(fileName)
-			gossiper.fileChunks.Store(fileName, append(fileChunksRaw.([][]byte), reply.Data))
+			if reply != nil {
+				// Store chunk
+				fileChunksRaw, _ := gossiper.fileChunks.Load(fileName)
+				gossiper.fileChunks.Store(fileName, append(fileChunksRaw.([][]byte), reply.Data))
+			}
 		}
 		// Reconstruct file from chunks and save correct size
 		fileChunksRaw, _ := gossiper.fileChunks.Load(fileName)
+		// TODO do not build if not complete!
 		fileMetaData.FileSize = files.BuildFileFromChunks(fileName, fileChunksRaw.([][]byte))
 		fmt.Println("RECONSTRUCTED file", fileName)
 		gossiper.dataChannels.Delete(fileHash)
@@ -136,16 +139,15 @@ func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, f
 	for {
 		select {
 		case <-ticker.C:
-			// TODO !! Print message!! Integrate to handleDataRequest
 			gossiper.handleDataRequest(request, fileName, index)
 		case reply := <-channel.(chan *messages.DataReply):
 			// Drop any message that has a non-coherent checksum, or does not come from the desired destination
-			// TODO !! If empty data, should choose another peer? Continue without reconstructing? Look answer on forum.
 			receivedHash := sha256.Sum256(reply.Data)
 			receivedHashStr := tools.BytesToHexString(receivedHash[:])
 			if receivedHashStr == chunkHashStr && reply.Origin == request.Destination {
 				return reply
 			}
+			return nil
 		}
 	}
 }
@@ -184,7 +186,6 @@ func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest, fileN
 			}
 		}
 		// If not present, send empty packet
-		// FIXME bugged?
 		gossiper.sendDataReply(request, nil)
 	}
 }
@@ -216,7 +217,6 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 	if ptpMessage.GetDestination() == gossiper.Name {
 		return true
 	}
-	// TODO combine 2 interface functions (get/decrement hoplimit) in 1?
 	if ptpMessage.GetHopLimit() > 0 {
 		ptpMessage.DecrementHopLimit()
 		if destination, ok := gossiper.routingTable.Load(ptpMessage.GetDestination()); ok {
