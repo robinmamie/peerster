@@ -29,7 +29,7 @@ func (gossiper *Gossiper) listenGossiper() {
 		case packet.Private != nil:
 			gossiper.handlePrivate(packet.Private)
 		case packet.DataRequest != nil:
-			gossiper.handleDataRequest(packet.DataRequest)
+			gossiper.handleDataRequest(packet.DataRequest, "", -1)
 		case packet.DataReply != nil:
 			gossiper.handleDataReply(packet.DataReply)
 		}

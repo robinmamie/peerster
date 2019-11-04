@@ -23,16 +23,15 @@ type Gossiper struct {
 	simple bool
 	Peers  []string
 	// Channels used to communicate between threads
-	statusWaiting sync.Map //map[string]chan *messages.StatusPacket
-	expected      sync.Map //map[string]chan bool
-	dataChannels  sync.Map //map[string]chan *messages.DataReply
+	statusWaiting sync.Map
+	expected      sync.Map
+	dataChannels  sync.Map
 	// Message history
-	// TODO find a way to combine them?
-	msgHistory      sync.Map //map[messages.PeerStatus]*messages.RumorMessage
-	allMessages     []*messages.RumorMessage
+	msgHistory      sync.Map
+	allMessages     []*messages.RumorMessage // Used for the GUI
 	PrivateMessages sync.Map
 	latestMessageID int
-	fileChunks      sync.Map //map[string][][]byte
+	fileChunks      sync.Map
 	// ID information
 	vectorClock *messages.StatusPacket
 	maxIDs      sync.Map

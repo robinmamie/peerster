@@ -20,6 +20,9 @@ func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage, address st
 
 	// New rumor detected
 	if !present {
+		fmt.Println("RUMOR origin", rumor.Origin, "from",
+			address, "ID", rumor.ID, "contents",
+			rumor.Text)
 		// Add rumor to history and update vector clock atomically
 		gossiper.updateMutex.Lock()
 		gossiper.msgHistory.Store(rumorStatus, rumor)

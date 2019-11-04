@@ -25,7 +25,6 @@ type FileMetadata struct {
 
 // NewFileMetadata creates the metadata of a given file
 func NewFileMetadata(name string) (*FileMetadata, [][]byte) {
-	// TODO ! Check if file name doesn't reference folders? No ../../whatever, no slash
 	// Import file
 	file := getFileData(name)
 
@@ -45,6 +44,7 @@ func getFileData(name string) []byte {
 	pathToExecutable, err := os.Executable()
 	tools.Check(err)
 	pathToFolder := filepath.Dir(pathToExecutable)
+	// We assume that the name complies with the specs (only file name).
 	pathToFile := pathToFolder + "/_SharedFiles/" + name
 
 	file, err := os.Open(pathToFile)

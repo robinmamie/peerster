@@ -18,9 +18,9 @@ func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
 }
 
 func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address string) {
-	fmt.Println("RUMOR origin", rumor.Origin, "from",
-		address, "ID", rumor.ID, "contents",
-		rumor.Text)
+	//fmt.Println("RUMOR origin", rumor.Origin, "from",
+	//	address, "ID", rumor.ID, "contents",
+	//	rumor.Text)
 
 	gossiper.receivedRumor(rumor, address)
 	gossiper.sendCurrentStatus(address)
@@ -67,7 +67,6 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 }
 
 func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
-	// TODO !! what to do for the GUI? Other list? Same list but with GossipPacket and then the server handles the differences with a switch?
 	if gossiper.ptpMessageReachedDestination(private) {
 
 		if oldValue, ok := gossiper.PrivateMessages.Load(private.Origin); ok {
@@ -91,11 +90,10 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 		return
 	}
 	gossiper.dataChannels.Store(fileHash, make(chan *messages.DataReply))
-	gossiper.handleDataRequest(request)
-	printFileDownloadInformation(request, fileName, 0)
+	gossiper.handleDataRequest(request, fileName, 0)
 
 	go func() {
-		reply := gossiper.waitForValidDataReply(request, fileHash)
+		reply := gossiper.waitForValidDataReply(request, fileHash, fileName, 0)
 		metaFile := reply.Data
 		if metaFile == nil {
 			// TODO should abort if node does not have metafile?
@@ -116,9 +114,8 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 			// Send chunks request & reset hop limit
 			request.HashValue = metaFile[files.SHA256ByteSize*(chunkNumber-1) : files.SHA256ByteSize*chunkNumber]
 			request.HopLimit = hopLimit
-			gossiper.handleDataRequest(request)
-			printFileDownloadInformation(request, fileName, chunkNumber)
-			reply := gossiper.waitForValidDataReply(request, fileHash)
+			gossiper.handleDataRequest(request, fileName, chunkNumber)
+			reply := gossiper.waitForValidDataReply(request, fileHash, fileName, chunkNumber)
 
 			// Store chunk
 			fileChunksRaw, _ := gossiper.fileChunks.Load(fileName)
@@ -132,7 +129,7 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 	}()
 }
 
-func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, fileHash string) *messages.DataReply {
+func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, fileHash string, fileName string, index int) *messages.DataReply {
 	ticker := time.NewTicker(5 * time.Second)
 	chunkHashStr := tools.BytesToHexString(request.HashValue)
 	channel, _ := gossiper.dataChannels.Load(fileHash)
@@ -140,7 +137,7 @@ func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, f
 		select {
 		case <-ticker.C:
 			// TODO !! Print message!! Integrate to handleDataRequest
-			gossiper.handleDataRequest(request)
+			gossiper.handleDataRequest(request, fileName, index)
 		case reply := <-channel.(chan *messages.DataReply):
 			// Drop any message that has a non-coherent checksum, or does not come from the desired destination
 			// TODO !! If empty data, should choose another peer? Continue without reconstructing? Look answer on forum.
@@ -163,7 +160,10 @@ func printFileDownloadInformation(request *messages.DataRequest, fileName string
 	fmt.Println("from", request.Destination)
 }
 
-func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest) {
+func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest, fileName string, index int) {
+	if request.Origin == gossiper.Name {
+		printFileDownloadInformation(request, fileName, index)
+	}
 	if gossiper.ptpMessageReachedDestination(request) {
 		requestedHash := tools.BytesToHexString(request.HashValue)
 		// Send corresponding DataReply back
