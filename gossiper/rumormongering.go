@@ -119,10 +119,10 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 	if _, ok := gossiper.routingTable[rumor.Origin]; !ok {
 		// Add destination to list
 		gossiper.DestinationList = append(gossiper.DestinationList, rumor.Origin)
-	} else {
-		if rumor.Text != "" {
-			fmt.Println("DSDV", rumor.Origin, address)
-		}
+	}
+
+	if rumor.Text != "" {
+		fmt.Println("DSDV", rumor.Origin, address)
 	}
 	gossiper.routingTable[rumor.Origin] = address
 }
