@@ -30,15 +30,15 @@ type Gossiper struct {
 	// TODO find a way to combine them?
 	msgHistory      map[messages.PeerStatus]*messages.RumorMessage
 	allMessages     []*messages.RumorMessage
-	PrivateMessages map[string][]*messages.PrivateMessage
+	PrivateMessages sync.Map
 	latestMessageID int
 	fileChunks      map[string][][]byte
 	// ID information
-	vectorClock map[string]uint32
-	maxIDs      map[string]uint32
+	vectorClock *messages.StatusPacket
+	maxIDs      sync.Map
 	ownID       uint32
 	// Routing table used for next hops
-	routingTable    map[string]string
+	routingTable    sync.Map
 	DestinationList []string
 	// Slice of indexed files
 	// TODO Could we simply map from FileHash to the MetaHash? ([]byte to []byte)
@@ -68,6 +68,9 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		statusWaiting[p] = make(chan *messages.StatusPacket)
 		expected[p] = make(chan bool)
 	}
+	emptyStatus := &messages.StatusPacket{
+		Want: nil,
+	}
 
 	return &Gossiper{
 		Address:       address,
@@ -81,15 +84,15 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		expected:      expected,
 		dataChannels:  make(map[string]chan *messages.DataReply),
 		// Map between an identifier and a list of RumorMessages
-		msgHistory:      make(map[messages.PeerStatus]*messages.RumorMessage),
-		allMessages:     make([]*messages.RumorMessage, 0),
-		PrivateMessages: make(map[string][]*messages.PrivateMessage),
+		msgHistory:  make(map[messages.PeerStatus]*messages.RumorMessage),
+		allMessages: make([]*messages.RumorMessage, 0),
+		//PrivateMessages: make(map[string][]*messages.PrivateMessage),
 		latestMessageID: 0,
 		fileChunks:      make(map[string][][]byte),
-		vectorClock:     make(map[string]uint32),
-		maxIDs:          make(map[string]uint32),
-		ownID:           1,
-		routingTable:    make(map[string]string),
+		vectorClock:     emptyStatus,
+		//maxIDs:          make(map[string]uint32),
+		ownID: 1,
+		//routingTable:    make(map[string]string),
 		DestinationList: make([]string, 0),
 		indexedFiles:    make([]*files.FileMetadata, 0),
 		updateMutex:     &sync.Mutex{},
@@ -126,15 +129,7 @@ func (gossiper *Gossiper) pickRandomPeer() (string, bool) {
 func (gossiper *Gossiper) getCurrentStatus() *messages.GossipPacket {
 	// TODO suboptimal, will take too much time!
 	packet := messages.GossipPacket{
-		Status: &messages.StatusPacket{
-			Want: nil,
-		},
-	}
-	for k, v := range gossiper.vectorClock {
-		packet.Status.Want = append(packet.Status.Want, messages.PeerStatus{
-			Identifier: k,
-			NextID:     v,
-		})
+		Status: gossiper.vectorClock,
 	}
 	return &packet
 }

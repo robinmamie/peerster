@@ -81,43 +81,49 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 // updateVectorClock updates the internal vector clock.
 func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorStatus messages.PeerStatus) {
 	// TODO create own package
-	if val, ok := gossiper.vectorClock[rumor.Origin]; ok {
-		if val == rumor.ID {
-			stillPresent := true
-			status := rumorStatus
-			// Verify if a sequence was completed
-			for stillPresent {
-				status.NextID++
-				gossiper.vectorClock[rumor.Origin]++
-				_, stillPresent = gossiper.msgHistory[status]
+	for i, ps := range gossiper.vectorClock.Want {
+		if ps.Identifier == rumor.Origin {
+			if ps.NextID == rumor.ID {
+				stillPresent := true
+				status := rumorStatus
+				// Verify if a sequence was completed
+				for stillPresent {
+					status.NextID++
+					gossiper.vectorClock.Want[i].NextID++
+					_, stillPresent = gossiper.msgHistory[status]
+				}
 			}
+			// else do not update vector clock, will be done once the sequence is completed
+			return
 		}
-		// else do not update vector clock, will be done once the sequence is completed
-
-	} else if rumor.ID == 1 {
-		// It's a new message, initialize the vector clock accordingly.
-		gossiper.vectorClock[rumor.Origin] = 2
-	} else {
-		// Got a newer message, still wait on #1
-		gossiper.vectorClock[rumor.Origin] = 1
 	}
+	// It's a new message, initialize the vector clock accordingly.
+	ps := messages.PeerStatus{
+		Identifier: rumor.Origin,
+		NextID:     2,
+	}
+	if rumor.ID != 1 {
+		// Got a newer message, still wait on #1
+		ps.NextID = 1
+	}
+	gossiper.vectorClock.Want = append(gossiper.vectorClock.Want, ps)
 }
 
 // updateRoutingTable takes a RumorMessage and updates the routing table accordingly.
 func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, address string) {
-	if val, ok := gossiper.maxIDs[rumor.Origin]; ok && rumor.ID <= val {
+	if val, ok := gossiper.maxIDs.Load(rumor.Origin); ok && rumor.ID <= val.(uint32) {
 		// This is not a newer RumorMessage
 		return
 	}
 
-	gossiper.maxIDs[rumor.Origin] = rumor.ID
+	gossiper.maxIDs.Store(rumor.Origin, rumor.ID)
 
-	if _, ok := gossiper.routingTable[rumor.Origin]; !ok {
+	if _, ok := gossiper.routingTable.Load(rumor.Origin); !ok {
 		// Add destination to list
 		gossiper.DestinationList = append(gossiper.DestinationList, rumor.Origin)
 	}
 
-	gossiper.routingTable[rumor.Origin] = address
+	gossiper.routingTable.Store(rumor.Origin, address)
 	if rumor.Text != "" {
 		fmt.Println("DSDV", rumor.Origin, address)
 	}
@@ -126,8 +132,12 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 // compareVectors establishes the difference between two vector clocks and
 // handles the updating logic. Returns true if the vectors are equal.
 func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target string) bool {
+	ourMap := make(map[string]uint32)
+	for _, e := range gossiper.vectorClock.Want {
+		ourMap[e.Identifier] = e.NextID
+	}
 	// 3. If equal, then return immediately.
-	if status.IsEqual(gossiper.vectorClock) {
+	if status.IsEqual(ourMap) {
 		return true
 	}
 	ourStatus := gossiper.getCurrentStatus().Status.Want
@@ -149,7 +159,7 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 	}
 	// 2. Verify if they know something new.
 	for _, theirE := range status.Want {
-		ourID, ok := gossiper.vectorClock[theirE.Identifier]
+		ourID, ok := ourMap[theirE.Identifier]
 		if !ok || ourID < theirE.NextID {
 			gossiper.sendCurrentStatus(target)
 			return false

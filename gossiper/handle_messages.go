@@ -67,7 +67,11 @@ func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 	// TODO !! what to do for the GUI? Other list? Same list but with GossipPacket and then the server handles the differences with a switch?
 	if gossiper.ptpMessageReachedDestination(private) {
 
-		gossiper.PrivateMessages[private.Origin] = append(gossiper.PrivateMessages[private.Origin], private)
+		if oldValue, ok := gossiper.PrivateMessages.Load(private.Origin); ok {
+			gossiper.PrivateMessages.Store(private.Origin, append(oldValue.([]*messages.PrivateMessage), private))
+		} else {
+			gossiper.PrivateMessages.Store(private.Origin, []*messages.PrivateMessage{private})
+		}
 
 		fmt.Println("PRIVATE origin", private.Origin,
 			"hop-limit", private.HopLimit,
@@ -205,8 +209,8 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 	// TODO combine 2 interface functions (get/decrement hoplimit) in 1?
 	if ptpMessage.GetHopLimit() > 0 {
 		ptpMessage.DecrementHopLimit()
-		if destination, ok := gossiper.routingTable[ptpMessage.GetDestination()]; ok {
-			gossiper.sendGossipPacket(destination, ptpMessage.CreatePacket())
+		if destination, ok := gossiper.routingTable.Load(ptpMessage.GetDestination()); ok {
+			gossiper.sendGossipPacket(destination.(string), ptpMessage.CreatePacket())
 		}
 	}
 	return false
