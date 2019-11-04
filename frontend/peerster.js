@@ -3,6 +3,14 @@ $(document).ready(function() {
     update()
     timer = setInterval(update, 1000)
 
+    $("#selectFile").click(function() {
+        selectFile()
+    })
+
+    $("#downloadFile").click(function() {
+        downloadFile()
+    })
+
     $("#sendMessage").click(function() {
         sendMessage()
     })
@@ -36,6 +44,24 @@ function sendMessage() {
     }
     $('#messageInput').val('')
     update()
+}
+
+function selectFile() {
+    const file = $("#file")[0].files[0].name
+    if (file === "") {
+        return
+    }
+    $.post("/file", {file: file})
+}
+
+function downloadFile() {
+    const name = $('#fileName').val()
+    const hash = $('#fileHash').val()
+    const origin = $('#fileOrigin').val()
+    if (name === "" || hash === "" || origin === "") {
+        return
+    }
+    $.post("/file", {file: name, hash: hash, origin: origin})
 }
 
 function saveNode() {

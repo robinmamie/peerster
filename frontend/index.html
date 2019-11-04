@@ -10,11 +10,27 @@
     <body>
         <div id="peerster">
             <h1>Peerster</h1>
-            <b>Local name:</b> <span class="nodeName"></span><br>
-            <b>Broadcast IP:</b> <span class="nodeIP"></span><br>
-            <b>Client port:</b> <span class="clientPort"></span>
 
-            <input id="file" type="file">
+            <b>Local name:</b>
+                <span class="nodeName"></span>
+                <br>
+            <b>Broadcast IP:</b>
+                <span class="nodeIP"></span>
+                <br>
+            <b>Client port:</b>
+                <span class="clientPort"></span>
+                <br><br>
+
+            <b>Select file:</b>
+                <input id="file" type="file">
+                <button id="selectFile">Select</button>
+                <br><br>
+            <b>Download file:</b>
+                <input id="fileName" type="text" placeholder="Name">
+                <input id="fileHash" type="text" placeholder="Hash">
+                <input id="fileOrigin" type="text" placeholder="Origin">
+                <button id="downloadFile">Download</button>
+                <br>
             
             <div class="content">
                 <div class="column main">

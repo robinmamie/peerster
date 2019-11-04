@@ -86,6 +86,7 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 	fileHash := tools.BytesToHexString(request.HashValue)
 	// Avoid several downloads of the same file
 	// TODO here would be the reason to use a map for the files already downloaded
+	// Or simply hash -> chunk, and keep the files in a file_name->hash table?
 	if _, ok := gossiper.dataChannels.Load(fileHash); ok {
 		return
 	}

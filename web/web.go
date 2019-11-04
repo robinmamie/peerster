@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -29,6 +30,7 @@ func InitWebServer(g *gossiper.Gossiper, uiPort string) {
 	http.HandleFunc("/peers", peerHandler)
 	http.HandleFunc("/destinations", destinationHandler)
 	http.HandleFunc("/fulldestinations", fullDestinationHandler)
+	http.HandleFunc("/file", fileHandler)
 	guiPort := 8080
 	for {
 		serverAddress := ":" + strconv.Itoa(guiPort)
@@ -150,6 +152,7 @@ func fullDestinationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO !! Put this logic in web_communication!! Var inside gossiper...
 var destinationsSaved int = 0
 
 func destinationHandler(w http.ResponseWriter, r *http.Request) {
@@ -170,5 +173,30 @@ func destinationHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(peersJSON)
+	}
+}
+
+func fileHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		err := r.ParseForm()
+		tools.Check(err)
+		conn, err := net.Dial("udp4", localAddress)
+		tools.Check(err)
+
+		packet := messages.Message{
+			File: &r.PostForm["file"][0],
+		}
+		if hash, ok := r.PostForm["hash"]; ok {
+			packet.Destination = &r.PostForm["origin"][0]
+			hashBytes, err := hex.DecodeString(hash[0])
+			tools.Check(err)
+			packet.Request = &hashBytes
+		}
+		packetBytes, err := protobuf.Encode(&packet)
+		tools.Check(err)
+
+		conn.Write(packetBytes)
+		conn.Close()
 	}
 }
