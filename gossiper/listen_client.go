@@ -88,5 +88,5 @@ func (gossiper *Gossiper) createRumor(message *messages.Message) {
 	gossiper.updateMutex.Lock()
 	gossiper.ownID++
 	gossiper.updateMutex.Unlock()
-	gossiper.receivedRumor(rumor, "")
+	gossiper.receivedRumor(rumor, gossiper.Address)
 }

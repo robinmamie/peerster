@@ -105,10 +105,6 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 
 // updateRoutingTable takes a RumorMessage and updates the routing table accordingly.
 func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, address string) {
-	if address == "" {
-		// The request comes from the client listener, ignore
-		return
-	}
 	if val, ok := gossiper.maxIDs[rumor.Origin]; ok && rumor.ID <= val {
 		// This is not a newer RumorMessage
 		return
@@ -121,10 +117,10 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 		gossiper.DestinationList = append(gossiper.DestinationList, rumor.Origin)
 	}
 
+	gossiper.routingTable[rumor.Origin] = address
 	if rumor.Text != "" {
 		fmt.Println("DSDV", rumor.Origin, address)
 	}
-	gossiper.routingTable[rumor.Origin] = address
 }
 
 // compareVectors establishes the difference between two vector clocks and
