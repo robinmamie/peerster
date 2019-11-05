@@ -32,13 +32,11 @@ func (gossiper *Gossiper) sendSimple(simple *messages.SimpleMessage) {
 	tools.Check(err)
 
 	// Send to all peers except the last sender
-	gossiper.updateMutex.Lock()
 	for _, address := range gossiper.Peers {
 		if address != fromPeer {
 			tools.SendPacketBytes(gossiper.conn, address, packetBytes)
 		}
 	}
-	gossiper.updateMutex.Unlock()
 }
 
 // getGossipPacket listens to other peers and waits for a GossipPacket.

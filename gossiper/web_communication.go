@@ -23,11 +23,11 @@ func (gossiper *Gossiper) GetMessagesList() []*messages.GossipPacket {
 
 // AddPeer adds a new known peer and its logic to the gossiper.
 func (gossiper *Gossiper) AddPeer(address string) {
-	gossiper.updateMutex.Lock()
+	gossiper.peerMutex.Lock()
 	gossiper.Peers = append(gossiper.Peers, address)
+	gossiper.peerMutex.Unlock()
 	gossiper.statusWaiting.Store(address, make(chan *messages.StatusPacket))
 	gossiper.expected.Store(address, make(chan bool))
-	gossiper.updateMutex.Unlock()
 }
 
 // GetLatestDestinationsList returns a list of the latest destinations.

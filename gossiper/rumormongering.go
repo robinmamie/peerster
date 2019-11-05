@@ -24,7 +24,6 @@ func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage, address st
 			rumor.Text)
 
 		// Add rumor to history and update vector clock atomically
-		gossiper.updateMutex.Lock()
 		gossiper.msgHistory.Store(rumorStatus, rumor)
 
 		// Do not display route rumors on the GUI
@@ -33,7 +32,6 @@ func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage, address st
 		}
 
 		gossiper.updateVectorClock(rumor, rumorStatus)
-		gossiper.updateMutex.Unlock()
 		gossiper.updateRoutingTable(rumor, address)
 
 		if target, ok := gossiper.pickRandomPeer(); ok {
@@ -95,7 +93,9 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 				// Verify if a sequence was completed
 				for stillPresent {
 					status.NextID++
+					gossiper.updateMutex.Lock()
 					gossiper.vectorClock.Want[i].NextID++
+					gossiper.updateMutex.Unlock()
 					_, stillPresent = gossiper.msgHistory.Load(status)
 				}
 			}
@@ -113,7 +113,9 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 		// Got a newer message, still wait on #1
 		ps.NextID = 1
 	}
+	gossiper.updateMutex.Lock()
 	gossiper.vectorClock.Want = append(gossiper.vectorClock.Want, ps)
+	gossiper.updateMutex.Unlock()
 }
 
 // updateRoutingTable takes a RumorMessage and updates the routing table
@@ -142,11 +144,12 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 // compareVectors establishes the difference between two vector clocks and
 // handles the updating logic. Returns true if the vectors are equal.
 func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target string) bool {
-	ourStatus := gossiper.vectorClock
 	ourMap := make(map[string]uint32)
-	for _, e := range ourStatus.Want {
+	gossiper.updateMutex.Lock()
+	for _, e := range gossiper.vectorClock.Want {
 		ourMap[e.Identifier] = e.NextID
 	}
+	gossiper.updateMutex.Unlock()
 	// 3. If equal, then return immediately.
 	if status.IsEqual(ourMap) {
 		return true
@@ -156,17 +159,21 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 		theirMap[e.Identifier] = e.NextID
 	}
 	// 1. Verify if we know something that they don't.
-	for _, ourE := range ourStatus.Want {
+	gossiper.updateMutex.Lock()
+	for _, ourE := range gossiper.vectorClock.Want {
 		theirID, ok := theirMap[ourE.Identifier]
 		if !ok && 1 < ourE.NextID {
 			gossiper.rumormongerPastMsg(ourE.Identifier, 1, target)
+			gossiper.updateMutex.Unlock()
 			return false
 		}
 		if ok && theirID < ourE.NextID {
 			gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target)
+			gossiper.updateMutex.Unlock()
 			return false
 		}
 	}
+	gossiper.updateMutex.Unlock()
 	// 2. Verify if they know something new.
 	for _, theirE := range status.Want {
 		ourID, ok := ourMap[theirE.Identifier]
@@ -196,5 +203,7 @@ func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target st
 // sendCurrentStatus sends the current vector clock as a GossipPacket to the
 // mentionned peer.
 func (gossiper *Gossiper) sendCurrentStatus(address string) {
+	gossiper.updateMutex.Lock()
 	gossiper.sendGossipPacket(address, gossiper.getCurrentStatus())
+	gossiper.updateMutex.Unlock()
 }

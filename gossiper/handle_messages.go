@@ -29,7 +29,6 @@ func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address stri
 func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address string) {
 	// Wake up correct subroutine if status received
 	unexpected := true
-	gossiper.updateMutex.Lock()
 	for _, target := range gossiper.Peers {
 
 		if target == address {
@@ -61,7 +60,6 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 			}
 		}
 	}
-	gossiper.updateMutex.Unlock()
 	// If unexpected Status, then compare vectors
 	if unexpected {
 		gossiper.compareVectors(status, address)

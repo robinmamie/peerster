@@ -47,6 +47,7 @@ type Gossiper struct {
 	fileChunks   sync.Map
 	// Lock used to synchronize writing on the vector clock and the history
 	updateMutex *sync.Mutex
+	peerMutex   *sync.Mutex
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
@@ -76,6 +77,7 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		ownID:           1,
 		destinationList: make([]string, 0),
 		updateMutex:     &sync.Mutex{},
+		peerMutex:       &sync.Mutex{},
 	}
 
 	// Create peers (and channels for inter-thread communications).
@@ -105,13 +107,13 @@ func (gossiper *Gossiper) Run(antiEntropyDelay uint64, rtimer uint64) {
 // pickRandomPeer picks a random peer from the list of known peers of the
 // gossiper.
 func (gossiper *Gossiper) pickRandomPeer() (string, bool) {
-	gossiper.updateMutex.Lock()
+	gossiper.peerMutex.Lock()
 	if len(gossiper.Peers) > 0 {
 		peer := gossiper.Peers[rand.Int()%len(gossiper.Peers)]
-		gossiper.updateMutex.Unlock()
+		gossiper.peerMutex.Unlock()
 		return peer, true
 	}
-	gossiper.updateMutex.Unlock()
+	gossiper.peerMutex.Unlock()
 	return "", false
 }
 
