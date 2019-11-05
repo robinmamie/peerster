@@ -59,8 +59,12 @@ body {
     margin-right: 10px;
 }
 
-p#msg, p#node {
+p#msg, p#node, p#private {
     margin-left: 5px;
     margin-top: 5px;
     margin-bottom: 5px;
+}
+
+p#private {
+    color: red;
 }

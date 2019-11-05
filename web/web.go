@@ -54,12 +54,21 @@ func getNodeID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func parseRumorList(msgList []*messages.RumorMessage) []string {
+func parseMessageList(msgList []*messages.GossipPacket) []string {
 	var messages []string = nil
-	for _, r := range msgList {
-		msg := r.Origin + " (" + fmt.Sprint(r.ID) + "): <code>" + r.Text + "</code>"
-		msg = "<p id=\"msg\">" + msg + "</p>"
-		messages = append(messages, msg)
+	for _, m := range msgList {
+		if m.Rumor != nil {
+			r := m.Rumor
+			msg := r.Origin + " (" + fmt.Sprint(r.ID) + "): <code>" + r.Text + "</code>"
+			msg = "<p id=\"msg\">" + msg + "</p>"
+			messages = append(messages, msg)
+		}
+		if m.Private != nil {
+			p := m.Private
+			msg := "From " + p.Origin + ": <code>" + p.Text + "</code>"
+			msg = "<p id=\"private\">" + msg + "</p>"
+			messages = append(messages, msg)
+		}
 	}
 	return messages
 }
@@ -67,8 +76,8 @@ func parseRumorList(msgList []*messages.RumorMessage) []string {
 func chatHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		msgList := gossip.GetLatestRumorMessagesList()
-		messages := parseRumorList(msgList)
+		msgList := gossip.GetLatestMessagesList()
+		messages := parseMessageList(msgList)
 		msgListJSON, err := json.Marshal(messages)
 		tools.Check(err)
 
@@ -99,8 +108,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 func fullChatHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		msgList := gossip.GetRumorMessagesList()
-		messages := parseRumorList(msgList)
+		msgList := gossip.GetMessagesList()
+		messages := parseMessageList(msgList)
 		msgListJSON, err := json.Marshal(messages)
 		tools.Check(err)
 
@@ -134,15 +143,20 @@ func peerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func parseDestinationList(destinations []string) []string {
+	var destList []string
+	for _, d := range destinations {
+		dest := "<p id=\"msg\" onclick=\"displayPrivate(this)\">" + d + "</p>"
+		destList = append(destList, dest)
+	}
+	return destList
+}
+
 func fullDestinationHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		allDestinations := gossip.DestinationList
-		var destinations []string = nil
-		for _, d := range allDestinations {
-			dest := "<p id=\"msg\" onclick=\"displayPrivate(this)\">" + d + "</p>"
-			destinations = append(destinations, dest)
-		}
+		destList := gossip.GetDestinationsList()
+		destinations := parseDestinationList(destList)
 		msgListJSON, err := json.Marshal(destinations)
 		tools.Check(err)
 
@@ -152,21 +166,11 @@ func fullDestinationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TODO !! Put this logic in web_communication!! Var inside gossiper...
-var destinationsSaved int = 0
-
 func destinationHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		allDestinations := gossip.DestinationList
-		var destinations []string = nil
-		for i, d := range allDestinations {
-			if destinationsSaved <= i {
-				dest := "<p id=\"msg\" onclick=\"displayPrivate(this)\">" + d + "</p>"
-				destinations = append(destinations, dest)
-			}
-		}
-		destinationsSaved = len(allDestinations)
+		destList := gossip.GetLatestDestinationsList()
+		destinations := parseDestinationList(destList)
 		peersJSON, err := json.Marshal(destinations)
 		tools.Check(err)
 

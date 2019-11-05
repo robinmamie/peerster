@@ -22,18 +22,19 @@ func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage, address st
 		fmt.Println("RUMOR origin", rumor.Origin, "from",
 			address, "ID", rumor.ID, "contents",
 			rumor.Text)
+
 		// Add rumor to history and update vector clock atomically
 		gossiper.updateMutex.Lock()
 		gossiper.msgHistory.Store(rumorStatus, rumor)
 
 		// Do not display route rumors on the GUI
 		if rumor.Text != "" {
-			gossiper.allMessages = append(gossiper.allMessages, rumor)
+			gossiper.allMessages = append(gossiper.allMessages, &messages.GossipPacket{Rumor: rumor})
 		}
 
 		gossiper.updateVectorClock(rumor, rumorStatus)
-		gossiper.updateRoutingTable(rumor, address)
 		gossiper.updateMutex.Unlock()
+		gossiper.updateRoutingTable(rumor, address)
 
 		if target, ok := gossiper.pickRandomPeer(); ok {
 			gossiper.rumormonger(rumor, target)
@@ -124,8 +125,8 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 	gossiper.maxIDs.Store(rumor.Origin, rumor.ID)
 
 	if _, ok := gossiper.routingTable.Load(rumor.Origin); !ok {
-		// For GUI: Add destination to list
-		gossiper.DestinationList = append(gossiper.DestinationList, rumor.Origin)
+		// For the GUI: add destination to list
+		gossiper.destinationList = append(gossiper.destinationList, rumor.Origin)
 	}
 
 	gossiper.routingTable.Store(rumor.Origin, address)
@@ -153,15 +154,13 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 	// 1. Verify if we know something that they don't.
 	for _, ourE := range ourStatus.Want {
 		theirID, ok := theirMap[ourE.Identifier]
-		if !ok && ourE.NextID > 1 {
-			if gossiper.rumormongerPastMsg(ourE.Identifier, 1, target) {
-				return false
-			}
+		if !ok && 1 < ourE.NextID {
+			gossiper.rumormongerPastMsg(ourE.Identifier, 1, target)
+			return false
 		}
-		if theirID < ourE.NextID {
-			if gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target) {
-				return false
-			}
+		if ok && theirID < ourE.NextID {
+			gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target)
+			return false
 		}
 	}
 	// 2. Verify if they know something new.
@@ -178,20 +177,15 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 // rumormongerPastMsg retrieves an older message to broadcast it to another
 // peer which does not posess it yet. It returns true iff the message was
 // indeed present.
-func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target string) bool {
+func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target string) {
 	ps := messages.PeerStatus{
 		Identifier: origin,
 		NextID:     id,
 	}
-	oldRumorRaw, ok := gossiper.msgHistory.Load(ps)
 
-	if !ok {
-		return false
-	}
-
+	oldRumorRaw, _ := gossiper.msgHistory.Load(ps)
 	oldRumor := oldRumorRaw.(*messages.RumorMessage)
 	gossiper.rumormonger(oldRumor, target)
-	return true
 }
 
 // sendCurrentStatus sends the current vector clock as a GossipPacket to the

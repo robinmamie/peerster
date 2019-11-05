@@ -5,8 +5,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/robinmamie/Peerster/files"
-
 	"github.com/robinmamie/Peerster/messages"
 	"github.com/robinmamie/Peerster/tools"
 )
@@ -28,20 +26,20 @@ type Gossiper struct {
 	dataChannels  sync.Map
 	// Message history
 	msgHistory      sync.Map
-	allMessages     []*messages.RumorMessage // Used for the GUI
-	PrivateMessages sync.Map                 // Used for the GUI
-	latestMessageID int
-	fileChunks      sync.Map
+	allMessages     []*messages.GossipPacket // Used for the GUI
+	latestMessageID int                      // Used for the GUI
 	// ID information
 	vectorClock *messages.StatusPacket
 	maxIDs      sync.Map
 	ownID       uint32
 	// Routing table used for next hops
-	routingTable    sync.Map
-	DestinationList []string
+	routingTable        sync.Map
+	destinationList     []string // Used for the GUI
+	latestDestinationID int      // Used for the GUI
 	// Slice of indexed files
-	// TODO Could we simply map from FileHash to the MetaHash? ([]byte to []byte)
-	indexedFiles []*files.FileMetadata
+	indexedFiles sync.Map
+	// Downloaded chunks, map between their hash and their value
+	fileChunks sync.Map
 	// Lock used to synchronize writing on the vector clock and the history
 	updateMutex *sync.Mutex
 }
@@ -73,12 +71,11 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		Name:            name,
 		simple:          simple,
 		Peers:           peers,
-		allMessages:     make([]*messages.RumorMessage, 0),
+		allMessages:     make([]*messages.GossipPacket, 0),
 		latestMessageID: 0,
 		vectorClock:     emptyStatus,
 		ownID:           1,
-		DestinationList: make([]string, 0),
-		indexedFiles:    make([]*files.FileMetadata, 0),
+		destinationList: make([]string, 0),
 		updateMutex:     &sync.Mutex{},
 	}
 

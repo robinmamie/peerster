@@ -2,8 +2,9 @@ package gossiper
 
 import "github.com/robinmamie/Peerster/messages"
 
-// GetLatestRumorMessagesList returns a list of the latest rumor messages.
-func (gossiper *Gossiper) GetLatestRumorMessagesList() []*messages.RumorMessage {
+// GetLatestMessagesList returns a list of the latest rumor and private
+// messages.
+func (gossiper *Gossiper) GetLatestMessagesList() []*messages.GossipPacket {
 	messagesQuantity := len(gossiper.allMessages)
 	defer func() {
 		gossiper.latestMessageID = messagesQuantity
@@ -14,8 +15,8 @@ func (gossiper *Gossiper) GetLatestRumorMessagesList() []*messages.RumorMessage 
 	return nil
 }
 
-// GetRumorMessagesList returns the list of all rumor messages.
-func (gossiper *Gossiper) GetRumorMessagesList() []*messages.RumorMessage {
+// GetMessagesList returns the list of all rumor messages.
+func (gossiper *Gossiper) GetMessagesList() []*messages.GossipPacket {
 	gossiper.latestMessageID = len(gossiper.allMessages)
 	return gossiper.allMessages
 }
@@ -28,4 +29,22 @@ func (gossiper *Gossiper) AddPeer(address string) {
 
 	gossiper.statusWaiting.Store(address, make(chan *messages.StatusPacket))
 	gossiper.expected.Store(address, make(chan bool))
+}
+
+// GetLatestDestinationsList returns a list of the latest destinations.
+func (gossiper *Gossiper) GetLatestDestinationsList() []string {
+	destinationsQuantity := len(gossiper.destinationList)
+	defer func() {
+		gossiper.latestDestinationID = destinationsQuantity
+	}()
+	if gossiper.latestDestinationID < destinationsQuantity {
+		return gossiper.destinationList[gossiper.latestDestinationID:]
+	}
+	return nil
+}
+
+// GetDestinationsList returns the list of all destinations.
+func (gossiper *Gossiper) GetDestinationsList() []string {
+	gossiper.latestDestinationID = len(gossiper.destinationList)
+	return gossiper.destinationList
 }

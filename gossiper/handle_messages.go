@@ -18,10 +18,6 @@ func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
 }
 
 func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address string) {
-	//fmt.Println("RUMOR origin", rumor.Origin, "from",
-	//	address, "ID", rumor.ID, "contents",
-	//	rumor.Text)
-
 	gossiper.receivedRumor(rumor, address)
 	gossiper.sendCurrentStatus(address)
 }
@@ -69,11 +65,7 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 	if gossiper.ptpMessageReachedDestination(private) {
 
-		if oldValue, ok := gossiper.PrivateMessages.Load(private.Origin); ok {
-			gossiper.PrivateMessages.Store(private.Origin, append(oldValue.([]*messages.PrivateMessage), private))
-		} else {
-			gossiper.PrivateMessages.Store(private.Origin, []*messages.PrivateMessage{private})
-		}
+		gossiper.allMessages = append(gossiper.allMessages, &messages.GossipPacket{Private: private})
 
 		fmt.Println("PRIVATE origin", private.Origin,
 			"hop-limit", private.HopLimit,
@@ -84,9 +76,7 @@ func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest, fileName string) {
 
 	fileHash := tools.BytesToHexString(request.HashValue)
-	// Avoid several downloads of the same file
-	// TODO here would be the reason to use a map for the files already downloaded
-	// Or simply hash -> chunk, and keep the files in a file_name->hash table?
+	// Avoid several downloads of the same file at the same time
 	if _, ok := gossiper.dataChannels.Load(fileHash); ok {
 		return
 	}
@@ -101,34 +91,30 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 		}
 		metaFile := reply.Data
 		totalChunks := len(metaFile) / files.SHA256ByteSize
-		fileMetaData := &files.FileMetadata{
-			FileName: fileName,
-			FileSize: totalChunks * files.ChunkSize, // Biggest possible size, will be changed when exact size known
-			MetaFile: metaFile,
-			MetaHash: reply.HashValue,
-		}
-		gossiper.indexedFiles = append(gossiper.indexedFiles, fileMetaData)
 
-		gossiper.fileChunks.Store(fileName, make([][]byte, 0))
+		gossiper.indexedFiles.Store(tools.BytesToHexString(reply.HashValue), metaFile)
+		var metaFileList []string
 
 		for chunkNumber := 1; chunkNumber <= totalChunks; chunkNumber++ {
-			// TODO handle chunks already downloaded
-			// Send chunks request & reset hop limit
+			// Send chunks request
 			request.HashValue = metaFile[files.SHA256ByteSize*(chunkNumber-1) : files.SHA256ByteSize*chunkNumber]
-			request.HopLimit = hopLimit
-			gossiper.handleDataRequest(request, fileName, chunkNumber)
-			reply := gossiper.waitForValidDataReply(request, fileHash, fileName, chunkNumber)
-			if reply != nil {
-				// Store chunk
-				fileChunksRaw, _ := gossiper.fileChunks.Load(fileName)
-				gossiper.fileChunks.Store(fileName, append(fileChunksRaw.([][]byte), reply.Data))
+			hexChunkHash := tools.BytesToHexString(request.HashValue)
+			metaFileList = append(metaFileList, hexChunkHash)
+			if _, ok := gossiper.fileChunks.Load(hexChunkHash); !ok {
+				// The chunk is absent from our table
+				// Reset hop limit
+				request.HopLimit = hopLimit
+				gossiper.handleDataRequest(request, fileName, chunkNumber)
+				if reply := gossiper.waitForValidDataReply(request, fileHash, fileName, chunkNumber); reply != nil {
+					// Store chunk
+					gossiper.fileChunks.Store(hexChunkHash, reply.Data)
+				}
 			}
 		}
 		// Reconstruct file from chunks and save correct size
-		fileChunksRaw, _ := gossiper.fileChunks.Load(fileName)
-		// TODO do not build if not complete!
-		fileMetaData.FileSize = files.BuildFileFromChunks(fileName, fileChunksRaw.([][]byte))
-		fmt.Println("RECONSTRUCTED file", fileName)
+		if ok := files.BuildFileFromChunks(fileName, metaFileList, &gossiper.fileChunks); ok {
+			fmt.Println("RECONSTRUCTED file", fileName)
+		}
 		gossiper.dataChannels.Delete(fileHash)
 	}()
 }
@@ -170,24 +156,14 @@ func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest, fileN
 	if gossiper.ptpMessageReachedDestination(request) {
 		requestedHash := tools.BytesToHexString(request.HashValue)
 		// Send corresponding DataReply back
-		for _, fileMetadata := range gossiper.indexedFiles {
-			if tools.BytesToHexString(fileMetadata.MetaHash) == requestedHash {
-				gossiper.sendDataReply(request, fileMetadata.MetaFile)
-				return
-			}
-			chunksRaw, _ := gossiper.fileChunks.Load(fileMetadata.FileName)
-			chunks := chunksRaw.([][]byte)
-			numberOfChunks := len(chunks)
-			for i := 0; i < numberOfChunks; i++ {
-				currentHash := tools.BytesToHexString(fileMetadata.MetaFile[files.SHA256ByteSize*i : files.SHA256ByteSize*(i+1)])
-				if currentHash == requestedHash {
-					gossiper.sendDataReply(request, chunks[i])
-					return
-				}
-			}
+		if metaFile, ok := gossiper.indexedFiles.Load(requestedHash); ok {
+			gossiper.sendDataReply(request, metaFile.([]byte))
+		} else if chunk, ok := gossiper.fileChunks.Load(requestedHash); ok {
+			gossiper.sendDataReply(request, chunk.([]byte))
+		} else {
+			// If not present, send empty packet
+			gossiper.sendDataReply(request, nil)
 		}
-		// If not present, send empty packet
-		gossiper.sendDataReply(request, nil)
 	}
 }
 

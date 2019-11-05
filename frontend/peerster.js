@@ -33,16 +33,24 @@ $(document).ready(function() {
 });
 
 function sendMessage() {
-    const msg = $('#messageInput').val()
-    if (msg === "") {
-        return
-    }
-    if (currDestination) {
-        $.post("/chat", {msg: msg, dest: currDestination.innerHTML})
+    sendMessage(null, null)
+}
+
+
+function displayPrivate(destination) {
+    dest = destination.innerHTML
+    msg = prompt("Private message to " + dest, "")
+    sendMessage(dest, msg)
+}
+
+function sendMessage(dest, msg) {
+    if (dest && msg) {
+        $.post("/chat", {msg: msg, dest: dest})
     } else {
+        msg = $('#messageInput').val()
         $.post("/chat", {msg: msg})
+        $('#messageInput').val('')
     }
-    $('#messageInput').val('')
     update()
 }
 
@@ -134,23 +142,6 @@ function update() {
             }
         }
     });
-}
-
-var currDestination = null;
-
-function displayPrivate(destination) {
-    // TODO could also open a dialog with only 1 field: message, since we know the destination.
-    if (currDestination) {
-        currDestination.style.fontWeight = 'normal';
-    }
-    if (destination !== currDestination) {
-        currDestination = destination;
-        destination.style.fontWeight = 'bold';
-        $("#messageInput").css("background-color","#FAA");
-    } else {
-        $("#messageInput").css("background-color","#FFF");
-        currDestination = null;
-    }
 }
 
 function beep() {

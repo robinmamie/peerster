@@ -3,6 +3,8 @@ package gossiper
 import (
 	"fmt"
 
+	"github.com/robinmamie/Peerster/tools"
+
 	"github.com/robinmamie/Peerster/files"
 	"github.com/robinmamie/Peerster/messages"
 )
@@ -55,10 +57,16 @@ func (gossiper *Gossiper) createRequest(message *messages.Message) {
 
 func (gossiper *Gossiper) indexFile(fileName string) {
 	fileMetaData, chunks := files.NewFileMetadata(fileName)
-	gossiper.indexedFiles = append(gossiper.indexedFiles, fileMetaData)
+	gossiper.indexedFiles.Store(tools.BytesToHexString(fileMetaData.MetaHash), fileMetaData.MetaFile)
+
 	// Store chunks in gossiper
 	if chunks != nil {
-		gossiper.fileChunks.Store(fileName, chunks)
+		totalChunks := len(fileMetaData.MetaFile) / files.SHA256ByteSize
+		for chunkNumber := 1; chunkNumber <= totalChunks; chunkNumber++ {
+			hashValue := fileMetaData.MetaFile[files.SHA256ByteSize*(chunkNumber-1) : files.SHA256ByteSize*chunkNumber]
+			hexChunkHash := tools.BytesToHexString(hashValue)
+			gossiper.fileChunks.Store(hexChunkHash, chunks[chunkNumber-1])
+		}
 	}
 }
 
@@ -77,8 +85,6 @@ func (gossiper *Gossiper) createPrivate(message *messages.Message) {
 }
 
 func (gossiper *Gossiper) createRumor(message *messages.Message) {
-	fmt.Println("CLIENT MESSAGE", message.Text)
-
 	rumor := &messages.RumorMessage{
 		Origin: gossiper.Name,
 		ID:     gossiper.ownID,

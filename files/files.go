@@ -2,10 +2,10 @@ package files
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/robinmamie/Peerster/tools"
 )
@@ -45,7 +45,7 @@ func getFileData(name string) []byte {
 	pathToExecutable, err := os.Executable()
 	tools.Check(err)
 	pathToFolder := filepath.Dir(pathToExecutable)
-	// TODO We assume that the name complies with the specs (only file name).
+	// We assume that the name complies with the specs (only file name).
 	pathToFile := pathToFolder + "/_SharedFiles/" + name
 
 	file, err := os.Open(pathToFile)
@@ -73,7 +73,7 @@ func createMetaFile(file []byte, fileSize int) ([]byte, []byte, [][]byte) {
 		sums = append(sums, sum[:]...)
 	}
 	metaHash := sha256.Sum256(sums)
-	fmt.Println(tools.BytesToHexString(metaHash[:])) // Debug code to know hash
+	//fmt.Println(tools.BytesToHexString(metaHash[:])) // Debug code to know hash
 	return sums, metaHash[:], chunks
 }
 
@@ -97,20 +97,23 @@ func (fileMeta FileMetadata) ExtractCorrespondingData(i int) []byte {
 }
 
 // BuildFileFromChunks reconstructs a file using all data chunks, and returns the file size.
-func BuildFileFromChunks(fileName string, chunks [][]byte) int {
+func BuildFileFromChunks(fileName string, metaFileList []string, chunks *sync.Map) bool {
 
 	fileContents := make([]byte, 0)
-	// TODO use metafile to iterate over hashes, and verify if contents are correct (2 loops)
-	for _, chunk := range chunks {
-		fileContents = append(fileContents, chunk...)
+	for _, hash := range metaFileList {
+		if chunk, ok := chunks.Load(hash); ok {
+			fileContents = append(fileContents, chunk.([]byte)...)
+		} else {
+			return false
+		}
 	}
 
 	pathToExecutable, err := os.Executable()
 	tools.Check(err)
 	pathToFolder := filepath.Dir(pathToExecutable)
-	// TODO We assume that the name complies with the specs (only file name).
+	// We assume that the name complies with the specs (only file name).
 	pathToFile := pathToFolder + "/_Downloads/" + fileName
 	err = ioutil.WriteFile(pathToFile, fileContents, 0644)
 	tools.Check(err)
-	return len(fileContents)
+	return true
 }
