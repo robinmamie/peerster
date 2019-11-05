@@ -153,7 +153,6 @@ func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, f
 			gossiper.handleDataRequest(request, fileName, index)
 		case reply := <-channel.(chan *messages.DataReply):
 			// Drop any message that has a non-coherent checksum
-			// TODO what does it do when we get an empty data field?
 			receivedHash := sha256.Sum256(reply.Data)
 			receivedHashStr := tools.BytesToHexString(receivedHash[:])
 			if receivedHashStr == chunkHashStr {
