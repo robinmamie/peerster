@@ -41,6 +41,8 @@ func NewFileMetadata(name string) (*FileMetadata, [][]byte) {
 	}, chunks
 }
 
+// getFileData returns the data of the file using its name. This assumes that
+// the specs are respected (in _SharedFiles, only file name given).
 func getFileData(name string) []byte {
 	pathToExecutable, err := os.Executable()
 	tools.Check(err)
@@ -56,6 +58,8 @@ func getFileData(name string) []byte {
 	return fileBytes
 }
 
+// createMetaFile creates the entire metafile using the file data and its size.
+// Returns in order the meta-file, the meta-hash and the chunk data.
 func createMetaFile(file []byte, fileSize int) ([]byte, []byte, [][]byte) {
 	// Compute number of chunks
 	chunkNumber := fileSize / ChunkSize
@@ -77,6 +81,8 @@ func createMetaFile(file []byte, fileSize int) ([]byte, []byte, [][]byte) {
 	return sums, metaHash[:], chunks
 }
 
+// getEndIndex returns the last index (used for slicing) of a chunk, according
+// to the size of the file.
 func getEndIndex(i int, fileSize int) int {
 	endIndex := ChunkSize * (i + 1)
 	// Check if chunk smaller than 8KB
@@ -85,15 +91,6 @@ func getEndIndex(i int, fileSize int) int {
 		endIndex = fileSize
 	}
 	return endIndex
-}
-
-// ExtractCorrespondingData returns the corresponding data from the
-// FileMetadata and the chunk number.
-func (fileMeta FileMetadata) ExtractCorrespondingData(i int) []byte {
-	// Import file
-	file := getFileData(fileMeta.FileName)
-	endIndex := getEndIndex(i, fileMeta.FileSize)
-	return file[ChunkSize*i : endIndex]
 }
 
 // BuildFileFromChunks reconstructs a file using all data chunks, and returns the file size.

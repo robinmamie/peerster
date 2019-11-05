@@ -62,6 +62,7 @@ func main() {
 	tools.Check(err)
 }
 
+// checkFlags checks if the flag combination is a valid one. If not, it panics.
 func checkFlags(textMsg string, dest string, file string, request string) {
 	textDefined := textMsg != ""
 	destDefined := dest != ""
@@ -80,6 +81,7 @@ func checkFlags(textMsg string, dest string, file string, request string) {
 	panicIfTrue(impossibleCombination, "ERROR (Bad argument combination)")
 }
 
+// checkRequest checks if the request has the right format. If not, it panics.
 func checkRequest(request string) []byte {
 	byteRequest, err := hex.DecodeString(request)
 	invalidRequest := err != nil
@@ -91,6 +93,7 @@ func checkRequest(request string) []byte {
 	return byteRequest
 }
 
+// panicIfTrue panics if the given condition is true.
 func panicIfTrue(b bool, errorMessage string) {
 	if b {
 		fmt.Println(errorMessage)

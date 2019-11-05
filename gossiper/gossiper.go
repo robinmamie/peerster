@@ -9,6 +9,12 @@ import (
 	"github.com/robinmamie/Peerster/tools"
 )
 
+// hopLimit defines the maximum number of hops.
+const hopLimit uint32 = 10
+
+// dataRequestTimeout sets the timeout of a data request packet
+const dataRequestTimeout int = 5
+
 // Gossiper defines a peer and stores the necessary information to use it.
 type Gossiper struct {
 	// Net information
@@ -36,10 +42,9 @@ type Gossiper struct {
 	routingTable        sync.Map
 	destinationList     []string // Used for the GUI
 	latestDestinationID int      // Used for the GUI
-	// Slice of indexed files
+	// File logic (files indexed and all chunks)
 	indexedFiles sync.Map
-	// Downloaded chunks, map between their hash and their value
-	fileChunks sync.Map
+	fileChunks   sync.Map
 	// Lock used to synchronize writing on the vector clock and the history
 	updateMutex *sync.Mutex
 }
@@ -58,11 +63,6 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 	cliConn, err := net.ListenUDP("udp4", cliAddr)
 	tools.Check(err)
 
-	// Channels used to communicate between routines during rumormongering.
-	emptyStatus := &messages.StatusPacket{
-		Want: nil,
-	}
-
 	gossiper := &Gossiper{
 		Address:         address,
 		conn:            udpConn,
@@ -70,19 +70,17 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		UIPort:          uiPort,
 		Name:            name,
 		simple:          simple,
-		Peers:           peers,
 		allMessages:     make([]*messages.GossipPacket, 0),
 		latestMessageID: 0,
-		vectorClock:     emptyStatus,
+		vectorClock:     &messages.StatusPacket{Want: nil},
 		ownID:           1,
 		destinationList: make([]string, 0),
 		updateMutex:     &sync.Mutex{},
 	}
 
-	// Create maps for inter-thread communications.
+	// Create peers (and channels for inter-thread communications).
 	for _, p := range peers {
-		gossiper.statusWaiting.Store(p, make(chan *messages.StatusPacket))
-		gossiper.expected.Store(p, make(chan bool))
+		gossiper.AddPeer(p)
 	}
 
 	return gossiper
@@ -90,7 +88,7 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 
 // Run starts the node and runs it.
 func (gossiper *Gossiper) Run(antiEntropyDelay uint64, rtimer uint64) {
-	// Activate anti-entropy/route rumors if necessary
+	// Activate anti-entropy/route rumors if necessary.
 	if !gossiper.simple {
 		if antiEntropyDelay > 0 {
 			go gossiper.antiEntropy(antiEntropyDelay)
@@ -122,6 +120,7 @@ func (gossiper *Gossiper) getCurrentStatus() *messages.GossipPacket {
 	return packet
 }
 
+// incrementOwnID atomically increments the ownID of the Gossiper.
 func (gossiper *Gossiper) incrementOwnID() {
 	gossiper.updateMutex.Lock()
 	gossiper.ownID++

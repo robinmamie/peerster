@@ -9,8 +9,6 @@ import (
 	"github.com/robinmamie/Peerster/messages"
 )
 
-const hopLimit uint32 = 10
-
 // listenClient handles the messages coming from the client.
 func (gossiper *Gossiper) listenClient() {
 	for {
