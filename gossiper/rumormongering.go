@@ -17,25 +17,28 @@ func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage, address st
 	}
 	_, present := gossiper.msgHistory.Load(rumorStatus)
 
+	gossiper.updateRoutingTable(rumor, address)
+
 	// New rumor detected
 	if !present {
-		fmt.Println("RUMOR origin", rumor.Origin, "from",
-			address, "ID", rumor.ID, "contents",
-			rumor.Text)
+		if address != "" {
+			fmt.Println("RUMOR origin", rumor.Origin, "from",
+				address, "ID", rumor.ID, "contents",
+				rumor.Text)
+		}
 
-		// Add rumor to history and update vector clock atomically
+		// Add rumor to history and update vector clock
 		gossiper.msgHistory.Store(rumorStatus, rumor)
+		gossiper.updateVectorClock(rumor, rumorStatus)
+
+		// Rumormonger it
+		if target, ok := gossiper.pickRandomPeer(); ok {
+			gossiper.rumormonger(rumor, target)
+		}
 
 		// Do not display route rumors on the GUI
 		if rumor.Text != "" {
 			gossiper.allMessages = append(gossiper.allMessages, &messages.GossipPacket{Rumor: rumor})
-		}
-
-		gossiper.updateVectorClock(rumor, rumorStatus)
-		gossiper.updateRoutingTable(rumor, address)
-
-		if target, ok := gossiper.pickRandomPeer(); ok {
-			gossiper.rumormonger(rumor, target)
 		}
 	}
 }
@@ -123,6 +126,11 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, address string) {
 	if val, ok := gossiper.maxIDs.Load(rumor.Origin); ok && rumor.ID <= val.(uint32) {
 		// This is not a newer RumorMessage
+		return
+	}
+
+	if address == "" {
+		// Comes directly from us
 		return
 	}
 
