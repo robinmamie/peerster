@@ -99,7 +99,8 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 					_, stillPresent = gossiper.msgHistory.Load(status)
 				}
 			}
-			// else do not update vector clock, will be done once the sequence is completed
+			// else do not update vector clock, will be done once the sequence
+			// is completed
 			return
 		}
 	}
@@ -115,7 +116,8 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 	gossiper.vectorClock.Want = append(gossiper.vectorClock.Want, ps)
 }
 
-// updateRoutingTable takes a RumorMessage and updates the routing table accordingly.
+// updateRoutingTable takes a RumorMessage and updates the routing table
+// accordingly.
 func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, address string) {
 	if val, ok := gossiper.maxIDs.Load(rumor.Origin); ok && rumor.ID <= val.(uint32) {
 		// This is not a newer RumorMessage
@@ -125,11 +127,13 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 	gossiper.maxIDs.Store(rumor.Origin, rumor.ID)
 
 	if _, ok := gossiper.routingTable.Load(rumor.Origin); !ok {
-		// For the GUI: add destination to list
+		// For the GUI: add destination to list if previously unknown.
 		gossiper.destinationList = append(gossiper.destinationList, rumor.Origin)
 	}
 
 	gossiper.routingTable.Store(rumor.Origin, address)
+
+	// Do not display route rumors!
 	if rumor.Text != "" {
 		fmt.Println("DSDV", rumor.Origin, address)
 	}
@@ -171,7 +175,8 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 			return false
 		}
 	}
-	return false
+	// Should never happen.
+	panic("Unknown behavior in vector clock comparison.")
 }
 
 // rumormongerPastMsg retrieves an older message to broadcast it to another

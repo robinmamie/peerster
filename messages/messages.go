@@ -63,7 +63,8 @@ func (sp StatusPacket) IsEqual(thatMap map[string]uint32) bool {
 	return true
 }
 
-// PointToPoint represents all point to point messages
+// PointToPoint represents all point to point messages. It is used to handle
+// the forwarding logic generically.
 type PointToPoint interface {
 	GetDestination() string
 	GetHopLimit() uint32

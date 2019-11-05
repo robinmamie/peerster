@@ -34,6 +34,7 @@ func (gossiper *Gossiper) listenClient() {
 	}
 }
 
+// createSimple creates a SimpleMessage and sends it.
 func (gossiper *Gossiper) createSimple(message *messages.Message) {
 	simple := &messages.SimpleMessage{
 		OriginalName:  gossiper.Name,
@@ -43,6 +44,8 @@ func (gossiper *Gossiper) createSimple(message *messages.Message) {
 	gossiper.sendSimple(simple)
 }
 
+// createRequest creates a first DataRequest and starts the downloading of the
+// file.
 func (gossiper *Gossiper) createRequest(message *messages.Message) {
 	request := &messages.DataRequest{
 		Origin:      gossiper.Name,
@@ -53,6 +56,7 @@ func (gossiper *Gossiper) createRequest(message *messages.Message) {
 	gossiper.handleClientDataRequest(request, *message.File)
 }
 
+// indexFile indexes a local file and saves all its chunks.
 func (gossiper *Gossiper) indexFile(fileName string) {
 	fileMetaData, chunks := files.NewFileMetadata(fileName)
 	gossiper.indexedFiles.Store(tools.BytesToHexString(fileMetaData.MetaHash), fileMetaData.MetaFile)
@@ -68,6 +72,7 @@ func (gossiper *Gossiper) indexFile(fileName string) {
 	}
 }
 
+// createPrivate creates a PrivateMessage and forwards it.
 func (gossiper *Gossiper) createPrivate(message *messages.Message) {
 	fmt.Println("CLIENT MESSAGE", message.Text,
 		"dest", *message.Destination)
@@ -82,6 +87,7 @@ func (gossiper *Gossiper) createPrivate(message *messages.Message) {
 	gossiper.handlePrivate(private)
 }
 
+// createRumor creates a RumorMessage and rumormongers it.
 func (gossiper *Gossiper) createRumor(message *messages.Message) {
 	rumor := &messages.RumorMessage{
 		Origin: gossiper.Name,

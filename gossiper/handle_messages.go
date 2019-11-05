@@ -70,7 +70,7 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 // private messages.
 //
 // As for all other point to point messages, the function routes it if it is not
-// destined for this node in particular
+// destined for this node in particular.
 func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 	if gossiper.ptpMessageReachedDestination(private) {
 
@@ -136,7 +136,8 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 	}()
 }
 
-// waitForValidDataReply resends a DataRequest in 5 seconds intervals
+// waitForValidDataReply resends a DataRequest in 5 seconds intervals, and drops
+// every non coherent reply.
 func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, fileHash string, fileName string, index int) *messages.DataReply {
 	ticker := time.NewTicker(time.Duration(dataRequestTimeout) * time.Second)
 	chunkHashStr := tools.BytesToHexString(request.HashValue)
@@ -148,6 +149,7 @@ func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, f
 			gossiper.handleDataRequest(request, fileName, index)
 		case reply := <-channel.(chan *messages.DataReply):
 			// Drop any message that has a non-coherent checksum
+			// TODO what does it do when we get an empty data field?
 			receivedHash := sha256.Sum256(reply.Data)
 			receivedHashStr := tools.BytesToHexString(receivedHash[:])
 			if receivedHashStr == chunkHashStr {
@@ -158,6 +160,8 @@ func (gossiper *Gossiper) waitForValidDataReply(request *messages.DataRequest, f
 	}
 }
 
+// printFileDownloadInformation prints the output message when downloading a
+// chunk.
 func printFileDownloadInformation(request *messages.DataRequest, fileName string, chunk int) {
 	fmt.Print("DOWNLOADING ")
 	if chunk == 0 {
@@ -168,6 +172,12 @@ func printFileDownloadInformation(request *messages.DataRequest, fileName string
 	fmt.Println("from", request.Destination)
 }
 
+// handleDataRequest replies with the asked metafile or chunk.
+// The fields fileName and index are only used for displaying purposes, when
+// creating a DataRequest.
+//
+// As for all other point to point messages, the function routes it if it is not
+// destined for this node in particular.
 func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest, fileName string, index int) {
 	if request.Origin == gossiper.Name {
 		printFileDownloadInformation(request, fileName, index)
@@ -176,8 +186,10 @@ func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest, fileN
 		requestedHash := tools.BytesToHexString(request.HashValue)
 		// Send corresponding DataReply back
 		if metaFile, ok := gossiper.indexedFiles.Load(requestedHash); ok {
+			// Send meta-file
 			gossiper.sendDataReply(request, metaFile.([]byte))
 		} else if chunk, ok := gossiper.fileChunks.Load(requestedHash); ok {
+			// Send chunk data
 			gossiper.sendDataReply(request, chunk.([]byte))
 		} else {
 			// If not present, send empty packet
@@ -186,6 +198,7 @@ func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest, fileN
 	}
 }
 
+// sendDataReply creates a DataReply and handles it.
 func (gossiper *Gossiper) sendDataReply(request *messages.DataRequest, data []byte) {
 	reply := &messages.DataReply{
 		Origin:      gossiper.Name,
@@ -197,6 +210,10 @@ func (gossiper *Gossiper) sendDataReply(request *messages.DataRequest, data []by
 	gossiper.handleDataReply(reply)
 }
 
+// handleDataReply handles a DataReply by giving it to the corresponding thread.
+//
+// As for all other point to point messages, the function routes it if it is not
+// destined for this node in particular.
 func (gossiper *Gossiper) handleDataReply(reply *messages.DataReply) {
 	if gossiper.ptpMessageReachedDestination(reply) {
 		gossiper.dataChannels.Range(func(key interface{}, value interface{}) bool {
@@ -207,8 +224,8 @@ func (gossiper *Gossiper) handleDataReply(reply *messages.DataReply) {
 	}
 }
 
-// ptpMessageReachedDestination verifies if a point-to-point message has reached its destination.
-// Otherwise, it just forwards it along its route.
+// ptpMessageReachedDestination verifies if a point-to-point message has reached
+// its destination. Otherwise, it just forwards it along its route.
 func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.PointToPoint) bool {
 	if ptpMessage.GetDestination() == gossiper.Name {
 		return true
