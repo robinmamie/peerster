@@ -11,7 +11,7 @@ import (
 )
 
 // ChunkSize designates the size of a chunk in bytes.
-const ChunkSize int = 1 << 13 // 8KB
+const ChunkSize int = tools.UDPSize // 8KB
 
 // SHA256ByteSize designates the size of a SHA-256 hash in bytes.
 const SHA256ByteSize int = 32

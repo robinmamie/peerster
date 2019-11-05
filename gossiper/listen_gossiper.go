@@ -39,10 +39,13 @@ func (gossiper *Gossiper) listenGossiper() {
 // isSenderAbsent returns true if the given address is not in the list of known
 // peers yet.
 func (gossiper *Gossiper) isSenderAbsent(address string) bool {
+	gossiper.updateMutex.Lock()
 	for _, peer := range gossiper.Peers {
 		if peer == address {
+			gossiper.updateMutex.Unlock()
 			return false
 		}
 	}
+	gossiper.updateMutex.Unlock()
 	return true
 }

@@ -176,7 +176,7 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 		}
 	}
 	// Should never happen.
-	panic("Unknown behavior in vector clock comparison.")
+	return true
 }
 
 // rumormongerPastMsg retrieves an older message to broadcast it to another

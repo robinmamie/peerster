@@ -105,9 +105,13 @@ func (gossiper *Gossiper) Run(antiEntropyDelay uint64, rtimer uint64) {
 // pickRandomPeer picks a random peer from the list of known peers of the
 // gossiper.
 func (gossiper *Gossiper) pickRandomPeer() (string, bool) {
+	gossiper.updateMutex.Lock()
 	if len(gossiper.Peers) > 0 {
-		return gossiper.Peers[rand.Int()%len(gossiper.Peers)], true
+		peer := gossiper.Peers[rand.Int()%len(gossiper.Peers)]
+		gossiper.updateMutex.Unlock()
+		return peer, true
 	}
+	gossiper.updateMutex.Unlock()
 	return "", false
 }
 
