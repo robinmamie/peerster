@@ -130,7 +130,9 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 
 	if _, ok := gossiper.routingTable.Load(rumor.Origin); !ok {
 		// For the GUI: add destination to list if previously unknown.
+		gossiper.destinationMutex.Lock()
 		gossiper.destinationList = append(gossiper.destinationList, rumor.Origin)
+		gossiper.destinationMutex.Unlock()
 	}
 
 	gossiper.routingTable.Store(rumor.Origin, address)

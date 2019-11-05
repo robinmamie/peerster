@@ -91,7 +91,7 @@ func (gossiper *Gossiper) createPrivate(message *messages.Message) {
 func (gossiper *Gossiper) createRumor(message *messages.Message) {
 	rumor := &messages.RumorMessage{
 		Origin: gossiper.Name,
-		ID:     gossiper.ownID,
+		ID:     gossiper.getOwnID(),
 		Text:   message.Text,
 	}
 	gossiper.incrementOwnID()

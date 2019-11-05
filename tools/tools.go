@@ -8,7 +8,7 @@ import (
 )
 
 // UDPSize is the maximum number of bytes sent by a UDP message
-const UDPSize = 1 << 13 // 8KB
+const UDPSize = 65507
 
 // AddressToString converts a UDPAddr to a string.
 func AddressToString(address *net.UDPAddr) string {

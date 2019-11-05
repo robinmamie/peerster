@@ -32,9 +32,11 @@ func (gossiper *Gossiper) AddPeer(address string) {
 
 // GetLatestDestinationsList returns a list of the latest destinations.
 func (gossiper *Gossiper) GetLatestDestinationsList() []string {
+	gossiper.destinationMutex.Lock()
 	destinationsQuantity := len(gossiper.destinationList)
 	defer func() {
 		gossiper.latestDestinationID = destinationsQuantity
+		gossiper.destinationMutex.Unlock()
 	}()
 	if gossiper.latestDestinationID < destinationsQuantity {
 		return gossiper.destinationList[gossiper.latestDestinationID:]

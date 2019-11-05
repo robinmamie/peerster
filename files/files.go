@@ -2,6 +2,7 @@ package files
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 )
 
 // ChunkSize designates the size of a chunk in bytes.
-const ChunkSize int = tools.UDPSize // 8KB
+const ChunkSize int = 1 << 13 // 8KB
 
 // SHA256ByteSize designates the size of a SHA-256 hash in bytes.
 const SHA256ByteSize int = 32
@@ -77,7 +78,7 @@ func createMetaFile(file []byte, fileSize int) ([]byte, []byte, [][]byte) {
 		sums = append(sums, sum[:]...)
 	}
 	metaHash := sha256.Sum256(sums)
-	//fmt.Println(tools.BytesToHexString(metaHash[:])) // Debug code to know hash
+	fmt.Println(tools.BytesToHexString(metaHash[:])) // Debug code to know hash
 	return sums, metaHash[:], chunks
 }
 

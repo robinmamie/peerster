@@ -46,8 +46,10 @@ type Gossiper struct {
 	indexedFiles sync.Map
 	fileChunks   sync.Map
 	// Lock used to synchronize writing on the vector clock and the history
-	updateMutex *sync.Mutex
-	peerMutex   *sync.Mutex
+	updateMutex      *sync.Mutex
+	peerMutex        *sync.Mutex
+	idMutex          *sync.Mutex
+	destinationMutex *sync.Mutex
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
@@ -65,19 +67,21 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 	tools.Check(err)
 
 	gossiper := &Gossiper{
-		Address:         address,
-		conn:            udpConn,
-		cliConn:         cliConn,
-		UIPort:          uiPort,
-		Name:            name,
-		simple:          simple,
-		allMessages:     make([]*messages.GossipPacket, 0),
-		latestMessageID: 0,
-		vectorClock:     &messages.StatusPacket{Want: nil},
-		ownID:           1,
-		destinationList: make([]string, 0),
-		updateMutex:     &sync.Mutex{},
-		peerMutex:       &sync.Mutex{},
+		Address:          address,
+		conn:             udpConn,
+		cliConn:          cliConn,
+		UIPort:           uiPort,
+		Name:             name,
+		simple:           simple,
+		allMessages:      make([]*messages.GossipPacket, 0),
+		latestMessageID:  0,
+		vectorClock:      &messages.StatusPacket{Want: nil},
+		ownID:            1,
+		destinationList:  make([]string, 0),
+		updateMutex:      &sync.Mutex{},
+		peerMutex:        &sync.Mutex{},
+		idMutex:          &sync.Mutex{},
+		destinationMutex: &sync.Mutex{},
 	}
 
 	// Create peers (and channels for inter-thread communications).
@@ -128,7 +132,15 @@ func (gossiper *Gossiper) getCurrentStatus() *messages.GossipPacket {
 
 // incrementOwnID atomically increments the ownID of the Gossiper.
 func (gossiper *Gossiper) incrementOwnID() {
-	gossiper.updateMutex.Lock()
+	gossiper.idMutex.Lock()
 	gossiper.ownID++
-	gossiper.updateMutex.Unlock()
+	gossiper.idMutex.Unlock()
+}
+
+// incrementOwnID atomically reads the ownID of the Gossiper.
+func (gossiper *Gossiper) getOwnID() uint32 {
+	gossiper.idMutex.Lock()
+	id := gossiper.ownID
+	gossiper.idMutex.Unlock()
+	return id
 }

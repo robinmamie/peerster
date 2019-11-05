@@ -41,7 +41,7 @@ func (gossiper *Gossiper) createRouteRumor() {
 	packet := &messages.GossipPacket{
 		Rumor: &messages.RumorMessage{
 			Origin: gossiper.Name,
-			ID:     gossiper.ownID,
+			ID:     gossiper.getOwnID(),
 			Text:   "",
 		},
 	}
