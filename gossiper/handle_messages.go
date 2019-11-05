@@ -20,7 +20,13 @@ func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
 
 // handleRumor begins the rumormongering logic when we get a rumor message.
 func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address string) {
-	gossiper.receivedRumor(rumor, address)
+	if address != "" {
+		fmt.Println("RUMOR origin", rumor.Origin, "from",
+			address, "ID", rumor.ID, "contents",
+			rumor.Text)
+	}
+	gossiper.updateRoutingTable(rumor, address)
+	gossiper.receivedRumor(rumor)
 	gossiper.sendCurrentStatus(address)
 }
 

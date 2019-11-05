@@ -9,7 +9,7 @@ import (
 )
 
 // receivedRumor handles any received rumor, new or not.
-func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage, address string) {
+func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage) {
 
 	rumorStatus := messages.PeerStatus{
 		Identifier: rumor.Origin,
@@ -17,16 +17,8 @@ func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage, address st
 	}
 	_, present := gossiper.msgHistory.Load(rumorStatus)
 
-	gossiper.updateRoutingTable(rumor, address)
-
 	// New rumor detected
 	if !present {
-		if address != "" {
-			fmt.Println("RUMOR origin", rumor.Origin, "from",
-				address, "ID", rumor.ID, "contents",
-				rumor.Text)
-		}
-
 		// Add rumor to history and update vector clock
 		gossiper.msgHistory.Store(rumorStatus, rumor)
 		gossiper.updateVectorClock(rumor, rumorStatus)

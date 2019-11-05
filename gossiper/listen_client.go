@@ -95,5 +95,5 @@ func (gossiper *Gossiper) createRumor(message *messages.Message) {
 		Text:   message.Text,
 	}
 	gossiper.incrementOwnID()
-	gossiper.receivedRumor(rumor, "")
+	gossiper.receivedRumor(rumor)
 }
