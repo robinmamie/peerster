@@ -2,7 +2,6 @@ package gossiper
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/robinmamie/Peerster/messages"
@@ -138,29 +137,31 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 // compareVectors establishes the difference between two vector clocks and
 // handles the updating logic. Returns true if the vectors are equal.
 func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target string) bool {
+	ourStatus := gossiper.vectorClock
 	ourMap := make(map[string]uint32)
-	for _, e := range gossiper.vectorClock.Want {
+	for _, e := range ourStatus.Want {
 		ourMap[e.Identifier] = e.NextID
 	}
 	// 3. If equal, then return immediately.
 	if status.IsEqual(ourMap) {
 		return true
 	}
-	ourStatus := gossiper.getCurrentStatus().Status.Want
 	theirMap := make(map[string]uint32)
 	for _, e := range status.Want {
 		theirMap[e.Identifier] = e.NextID
 	}
 	// 1. Verify if we know something that they don't.
-	for _, ourE := range ourStatus {
+	for _, ourE := range ourStatus.Want {
 		theirID, ok := theirMap[ourE.Identifier]
-		if !ok {
-			gossiper.rumormongerPastMsg(ourE.Identifier, 1, target)
-			return false
+		if !ok && ourE.NextID > 1 {
+			if gossiper.rumormongerPastMsg(ourE.Identifier, 1, target) {
+				return false
+			}
 		}
 		if theirID < ourE.NextID {
-			gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target)
-			return false
+			if gossiper.rumormongerPastMsg(ourE.Identifier, theirID, target) {
+				return false
+			}
 		}
 	}
 	// 2. Verify if they know something new.
@@ -171,20 +172,26 @@ func (gossiper *Gossiper) compareVectors(status *messages.StatusPacket, target s
 			return false
 		}
 	}
-	log.Fatal("Undefined behavior in vector comparison")
 	return false
 }
 
 // rumormongerPastMsg retrieves an older message to broadcast it to another
-// peer which does not posess it yet.
-func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target string) {
+// peer which does not posess it yet. It returns true iff the message was
+// indeed present.
+func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target string) bool {
 	ps := messages.PeerStatus{
 		Identifier: origin,
 		NextID:     id,
 	}
-	oldRumorRaw, _ := gossiper.msgHistory.Load(ps)
+	oldRumorRaw, ok := gossiper.msgHistory.Load(ps)
+
+	if !ok {
+		return false
+	}
+
 	oldRumor := oldRumorRaw.(*messages.RumorMessage)
 	gossiper.rumormonger(oldRumor, target)
+	return true
 }
 
 // sendCurrentStatus sends the current vector clock as a GossipPacket to the
