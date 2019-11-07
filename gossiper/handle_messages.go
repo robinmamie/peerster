@@ -45,30 +45,27 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 			// Send packet to correct channel, as many times as possible
 			channelRaw, _ := gossiper.statusWaiting.Load(target)
 			channel := channelRaw.(chan *messages.StatusPacket)
-			go func() {
-				listening := true
-				unexpected := true
-				for listening {
+			listening := true
+			unexpected := true
+			for listening {
+				select {
+				case channel <- status:
+					// Allow for the routine to process the message
+					timeout := time.NewTicker(1 * time.Millisecond)
 					select {
-					case channel <- status:
-						// Allow for the routine to process the message
-						timeout := time.NewTicker(1 * time.Millisecond)
-						select {
-						case <-expected:
-							unexpected = false
-						case <-timeout.C:
-							listening = false
-						}
-					default:
+					case <-expected:
+						unexpected = false
+					case <-timeout.C:
 						listening = false
 					}
+				default:
+					listening = false
 				}
-				// If unexpected status, then compare vectors
-				if unexpected {
-					gossiper.compareVectors(status, address)
-				}
-			}()
-			return
+			}
+			// If unexpected status, then compare vectors
+			if unexpected {
+				gossiper.compareVectors(status, address)
+			}
 		}
 	}
 }

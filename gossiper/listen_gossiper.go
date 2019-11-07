@@ -21,17 +21,17 @@ func (gossiper *Gossiper) listenGossiper() {
 
 		switch {
 		case packet.Simple != nil:
-			gossiper.handleSimple(packet.Simple)
+			go gossiper.handleSimple(packet.Simple)
 		case packet.Rumor != nil:
-			gossiper.handleRumor(packet.Rumor, address)
+			go gossiper.handleRumor(packet.Rumor, address)
 		case packet.Status != nil:
-			gossiper.handleStatus(packet.Status, address)
+			go gossiper.handleStatus(packet.Status, address)
 		case packet.Private != nil:
-			gossiper.handlePrivate(packet.Private)
+			go gossiper.handlePrivate(packet.Private)
 		case packet.DataRequest != nil:
-			gossiper.handleDataRequest(packet.DataRequest, "", -1)
+			go gossiper.handleDataRequest(packet.DataRequest, "", -1)
 		case packet.DataReply != nil:
-			gossiper.handleDataReply(packet.DataReply)
+			go gossiper.handleDataReply(packet.DataReply)
 		}
 	}
 }
