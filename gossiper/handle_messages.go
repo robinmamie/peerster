@@ -21,9 +21,9 @@ func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
 // handleRumor begins the rumormongering logic when we get a rumor message.
 func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address string) {
 	gossiper.updateRoutingTable(rumor, address)
-	//fmt.Println("RUMOR origin", rumor.Origin, "from",
-	//	address, "ID", rumor.ID, "contents",
-	//	rumor.Text)
+	fmt.Println("RUMOR origin", rumor.Origin, "from",
+		address, "ID", rumor.ID, "contents",
+		rumor.Text)
 	gossiper.receivedRumor(rumor)
 	gossiper.sendCurrentStatus(address)
 }
@@ -32,7 +32,6 @@ func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address stri
 // ack.
 func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address string) {
 	// Wake up correct subroutine if status received
-	unexpected := true
 	for _, target := range gossiper.Peers {
 
 		if target == address {
@@ -44,29 +43,33 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 			}
 
 			// Send packet to correct channel, as many times as possible
-			listening := true
 			channelRaw, _ := gossiper.statusWaiting.Load(target)
 			channel := channelRaw.(chan *messages.StatusPacket)
-			for listening {
-				select {
-				case channel <- status:
-					// Allow for the routine to process the message
-					timeout := time.NewTicker(10 * time.Millisecond)
+			go func() {
+				listening := true
+				unexpected := true
+				for listening {
 					select {
-					case <-expected:
-						unexpected = false
-					case <-timeout.C:
+					case channel <- status:
+						// Allow for the routine to process the message
+						timeout := time.NewTicker(1 * time.Millisecond)
+						select {
+						case <-expected:
+							unexpected = false
+						case <-timeout.C:
+							listening = false
+						}
+					default:
 						listening = false
 					}
-				default:
-					listening = false
 				}
-			}
+				// If unexpected status, then compare vectors
+				if unexpected {
+					gossiper.compareVectors(status, address)
+				}
+			}()
+			return
 		}
-	}
-	// If unexpected Status, then compare vectors
-	if unexpected {
-		gossiper.compareVectors(status, address)
 	}
 }
 
