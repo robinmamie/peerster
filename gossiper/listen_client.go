@@ -20,15 +20,15 @@ func (gossiper *Gossiper) listenClient() {
 			if message.Destination != nil && *message.Destination != "" {
 				if message.File != nil && *message.File != "" {
 					if message.Request != nil && *message.Request != nil {
-						gossiper.createRequest(message)
+						go gossiper.createRequest(message)
 					}
 				} else {
-					gossiper.createPrivate(message)
+					go gossiper.createPrivate(message)
 				}
 			} else if message.File != nil && *message.File != "" {
-				gossiper.indexFile(*message.File)
+				go gossiper.indexFile(*message.File)
 			} else {
-				gossiper.createRumor(message)
+				go gossiper.createRumor(message)
 			}
 		}
 	}
