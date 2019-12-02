@@ -332,12 +332,13 @@ func (gossiper *Gossiper) requestCollision(request *messages.SearchRequest) bool
 		case gossiper.searchRequestLookup <- request:
 		default:
 		}
+		timeout := time.NewTicker(time.Millisecond)
 		select {
 		case conflict := <-gossiper.searchRequestTimeout:
 			if conflict {
 				return true
 			}
-		default:
+		case <-timeout.C:
 			listening = false
 		}
 	}
