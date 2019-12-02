@@ -281,6 +281,7 @@ func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequ
 		}()
 	}
 	matches := 0
+	matchMap := make(map[string]string)
 	for {
 		// TODO add timer to kill process when nothing comes back
 		select {
@@ -296,12 +297,20 @@ func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequ
 					" chunks=", chunkList, "\n")
 
 				if results.ChunkCount == (uint64)(len(results.ChunkMap)) {
-					matches++
-					gossiper.fileDestinations.Store(tools.BytesToHexString(results.MetafileHash), reply.Origin)
-					if matches == 2 {
-						gossiper.searchFinished <- true
-						fmt.Println("SEARCH FINISHED")
-						return
+					hexMetaHash := tools.BytesToHexString(results.MetafileHash)
+					fullMatch := true
+					if node, ok := matchMap[hexMetaHash]; ok && node == reply.Origin {
+						fullMatch = false
+					}
+					matchMap[hexMetaHash] = reply.Origin
+					if fullMatch {
+						matches++
+						gossiper.fileDestinations.Store(hexMetaHash, reply.Origin)
+						if matches == 2 {
+							gossiper.searchFinished <- true
+							fmt.Println("SEARCH FINISHED")
+							return
+						}
 					}
 				}
 			}
