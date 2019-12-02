@@ -46,5 +46,5 @@ func (gossiper *Gossiper) createRouteRumor() {
 		},
 	}
 	// Add our own address to the routing table.
-	gossiper.receivedRumor(packet.Rumor)
+	gossiper.receivedGossip(packet.Rumor)
 }

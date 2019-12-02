@@ -8,28 +8,28 @@ import (
 	"github.com/robinmamie/Peerster/tools"
 )
 
-// receivedRumor handles any received rumor, new or not.
-func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage) {
+// receivedGossip handles any received gossiping message, new or not.
+func (gossiper *Gossiper) receivedGossip(g messages.Gossiping) {
 
-	rumorStatus := messages.PeerStatus{
-		Identifier: rumor.Origin,
-		NextID:     rumor.ID,
+	gossipStatus := messages.PeerStatus{
+		Identifier: g.GetOrigin(),
+		NextID:     g.GetID(),
 	}
-	_, present := gossiper.msgHistory.Load(rumorStatus)
+	_, present := gossiper.msgHistory.Load(gossipStatus)
 
-	// New rumor detected
+	// New gossiping message detected
 	if !present {
-		// Add rumor to history and update vector clock
-		gossiper.msgHistory.Store(rumorStatus, rumor)
-		gossiper.updateVectorClock(rumor, rumorStatus)
+		// Add message to history and update vector clock
+		gossiper.msgHistory.Store(gossipStatus, g)
+		gossiper.updateVectorClock(g, gossipStatus)
 
 		// Rumormonger it
 		if target, ok := gossiper.pickRandomPeer(); ok {
-			gossiper.rumormonger(rumor, target)
+			gossiper.rumormonger(g, target)
 		}
 
 		// Do not display route rumors on the GUI
-		if rumor.Text != "" {
+		if rumor, ok := g.(*messages.RumorMessage); ok && rumor.Text != "" {
 			gossiper.allMessages = append(gossiper.allMessages, &messages.GossipPacket{Rumor: rumor})
 		}
 	}
@@ -37,10 +37,8 @@ func (gossiper *Gossiper) receivedRumor(rumor *messages.RumorMessage) {
 
 // rumormonger handles the main logic of the rumormongering protocol. Always
 // creates a new go routine.
-func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target string) {
-	packet := &messages.GossipPacket{
-		Rumor: rumor,
-	}
+func (gossiper *Gossiper) rumormonger(g messages.Gossiping, target string) {
+	packet := g.CreatePacket()
 	gossiper.sendGossipPacket(target, packet)
 
 	go func() {
@@ -54,13 +52,13 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 			select {
 			case <-timeout.C:
 				if target, ok := gossiper.pickRandomPeer(); ok {
-					gossiper.rumormonger(rumor, target)
+					gossiper.rumormonger(g, target)
 				}
 				return
 
 			case status := <-statusChannel:
 				for _, sp := range status.Want {
-					if sp.Identifier == packet.Rumor.Origin && sp.NextID > packet.Rumor.ID {
+					if sp.Identifier == g.GetOrigin() && sp.NextID > g.GetID() {
 						// Announce that the package is expected
 						select {
 						case expected <- true:
@@ -70,7 +68,7 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 						// We flip the coin iff we are level. Otherwise, there is no mention of any coin in the specs.
 						if gossiper.compareVectors(status, target) && tools.FlipCoin() {
 							if target, ok := gossiper.pickRandomPeer(); ok {
-								gossiper.rumormonger(rumor, target)
+								gossiper.rumormonger(g, target)
 							}
 						}
 						return
@@ -82,12 +80,12 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 }
 
 // updateVectorClock updates the internal vector clock.
-func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorStatus messages.PeerStatus) {
+func (gossiper *Gossiper) updateVectorClock(g messages.Gossiping, status messages.PeerStatus) {
 	for i, ps := range gossiper.vectorClock.Want {
-		if ps.Identifier == rumor.Origin {
-			if ps.NextID == rumor.ID {
+		if ps.Identifier == g.GetOrigin() {
+			if ps.NextID == g.GetID() {
 				stillPresent := true
-				status := rumorStatus
+				status := status
 				// Verify if a sequence was completed
 				for stillPresent {
 					status.NextID++
@@ -104,10 +102,10 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 	}
 	// It's a new message, initialize the vector clock accordingly.
 	ps := messages.PeerStatus{
-		Identifier: rumor.Origin,
+		Identifier: g.GetOrigin(),
 		NextID:     2,
 	}
-	if rumor.ID != 1 {
+	if g.GetID() != 1 {
 		// Got a newer message, still wait on #1
 		ps.NextID = 1
 	}
@@ -118,8 +116,8 @@ func (gossiper *Gossiper) updateVectorClock(rumor *messages.RumorMessage, rumorS
 
 // updateRoutingTable takes a RumorMessage and updates the routing table
 // accordingly.
-func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, address string) {
-	if val, ok := gossiper.maxIDs.Load(rumor.Origin); ok && rumor.ID <= val.(uint32) {
+func (gossiper *Gossiper) updateRoutingTable(g messages.Gossiping, address string) {
+	if val, ok := gossiper.maxIDs.Load(g.GetOrigin()); ok && g.GetID() <= val.(uint32) {
 		// This is not a newer RumorMessage
 		return
 	}
@@ -129,20 +127,20 @@ func (gossiper *Gossiper) updateRoutingTable(rumor *messages.RumorMessage, addre
 		return
 	}
 
-	gossiper.maxIDs.Store(rumor.Origin, rumor.ID)
+	gossiper.maxIDs.Store(g.GetOrigin(), g.GetID())
 
-	if _, ok := gossiper.routingTable.Load(rumor.Origin); !ok {
+	if _, ok := gossiper.routingTable.Load(g.GetOrigin()); !ok {
 		// For the GUI: add destination to list if previously unknown.
 		gossiper.destinationMutex.Lock()
-		gossiper.destinationList = append(gossiper.destinationList, rumor.Origin)
+		gossiper.destinationList = append(gossiper.destinationList, g.GetOrigin())
 		gossiper.destinationMutex.Unlock()
 	}
 
-	gossiper.routingTable.Store(rumor.Origin, address)
+	gossiper.routingTable.Store(g.GetOrigin(), address)
 
 	// Do not display route rumors!
-	if rumor.Text != "" {
-		fmt.Println("DSDV", rumor.Origin, address)
+	if rumor, ok := g.(*messages.RumorMessage); !ok || (ok && rumor.Text != "") {
+		fmt.Println("DSDV", g.GetOrigin(), address)
 	}
 }
 
@@ -200,9 +198,9 @@ func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target st
 		NextID:     id,
 	}
 
-	oldRumorRaw, _ := gossiper.msgHistory.Load(ps)
-	oldRumor := oldRumorRaw.(*messages.RumorMessage)
-	gossiper.rumormonger(oldRumor, target)
+	oldGossipRaw, _ := gossiper.msgHistory.Load(ps)
+	oldGossip := oldGossipRaw.(messages.Gossiping)
+	gossiper.rumormonger(oldGossip, target)
 }
 
 // sendCurrentStatus sends the current vector clock as a GossipPacket to the

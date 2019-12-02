@@ -98,7 +98,7 @@ func (gossiper *Gossiper) createRumor(message *messages.Message) {
 		ID:     gossiper.getAndIncrementOwnID(),
 		Text:   message.Text,
 	}
-	gossiper.receivedRumor(rumor)
+	gossiper.receivedGossip(rumor)
 }
 
 func (gossiper *Gossiper) createSearch(message *messages.Message) {

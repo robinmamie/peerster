@@ -16,9 +16,10 @@ func main() {
 	var gossipAddr string
 	var name string
 	var peersString string
-	var simple bool
 	var antiEntropy uint64
 	var rtimer uint64
+	var simple bool
+	var hw3ex2 bool
 
 	flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
 	flag.StringVar(&gossipAddr, "gossipAddr", "127.0.0.1:5000",
@@ -26,12 +27,14 @@ func main() {
 	flag.StringVar(&name, "name", "", "name of the gossiper")
 	flag.StringVar(&peersString, "peers", "",
 		"comma separated list of peers of the form ip:port")
-	flag.BoolVar(&simple, "simple", false,
-		"run gossiper in simple broadcast mode")
 	flag.Uint64Var(&antiEntropy, "antiEntropy", 10,
 		"use the given timeout in seconds for anti-entropy")
 	flag.Uint64Var(&rtimer, "rtimer", 0,
 		"timeout in seconds to send route rumors; 0 means disable sending route rumors")
+	flag.BoolVar(&simple, "simple", false,
+		"run gossiper in simple broadcast mode")
+	flag.BoolVar(&hw3ex2, "hw3ex2", false,
+		"run gossiper in HW 3, ex 2 mode")
 
 	flag.Parse()
 
@@ -44,7 +47,7 @@ func main() {
 	os.Mkdir("_Downloads", 0755)
 	os.Mkdir("_SharedFiles", 0755)
 
-	gossiper := gossiper.NewGossiper(gossipAddr, name, uiPort, simple, peers)
+	gossiper := gossiper.NewGossiper(gossipAddr, name, uiPort, peers, simple, hw3ex2)
 
 	go web.InitWebServer(gossiper, uiPort)
 	gossiper.Run(antiEntropy, rtimer)

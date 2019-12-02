@@ -28,7 +28,7 @@ func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address stri
 	fmt.Println("RUMOR origin", rumor.Origin, "from",
 		address, "ID", rumor.ID, "contents",
 		rumor.Text)
-	gossiper.receivedRumor(rumor)
+	gossiper.receivedGossip(rumor)
 	gossiper.sendCurrentStatus(address)
 }
 
@@ -58,7 +58,7 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 				select {
 				case channel <- status:
 					// Allow for the routine to process the message
-					timeout := time.NewTicker(1 * time.Millisecond)
+					timeout := time.NewTicker(time.Millisecond)
 					select {
 					case <-expected:
 						unexpected = false

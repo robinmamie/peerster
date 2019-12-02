@@ -25,6 +25,7 @@ type Gossiper struct {
 	// Gossiper information
 	Name   string
 	simple bool
+	hw3ex2 bool
 	Peers  []string
 	// Channels used to communicate between threads
 	statusWaiting        sync.Map
@@ -59,7 +60,7 @@ type Gossiper struct {
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
 // list of peers.
-func NewGossiper(address, name string, uiPort string, simple bool, peers []string) *Gossiper {
+func NewGossiper(address, name string, uiPort string, peers []string, simple bool, hw3ex2 bool) *Gossiper {
 	// Creation of all necessary UDP sockets.
 	udpAddr, err := net.ResolveUDPAddr("udp4", address)
 	tools.Check(err)
@@ -78,6 +79,7 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 		UIPort:               uiPort,
 		Name:                 name,
 		simple:               simple,
+		hw3ex2:               hw3ex2,
 		searchRequestLookup:  make(chan *messages.SearchRequest),
 		searchReply:          make(chan *messages.SearchReply),
 		searchRequestTimeout: make(chan bool),

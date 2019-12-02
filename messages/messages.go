@@ -21,6 +21,8 @@ type GossipPacket struct {
 	DataReply     *DataReply
 	SearchRequest *SearchRequest
 	SearchReply   *SearchReply
+	TLCMessage    *TLCMessage
+	Ack           *TLCAck
 }
 
 // SimpleMessage stores the information about the original sender,
