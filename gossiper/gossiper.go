@@ -130,17 +130,11 @@ func (gossiper *Gossiper) getCurrentStatus() *messages.GossipPacket {
 	return packet
 }
 
-// incrementOwnID atomically increments the ownID of the Gossiper.
-func (gossiper *Gossiper) incrementOwnID() {
-	gossiper.idMutex.Lock()
-	gossiper.ownID++
-	gossiper.idMutex.Unlock()
-}
-
 // incrementOwnID atomically reads the ownID of the Gossiper.
-func (gossiper *Gossiper) getOwnID() uint32 {
+func (gossiper *Gossiper) getAndIncrementOwnID() uint32 {
 	gossiper.idMutex.Lock()
 	id := gossiper.ownID
+	gossiper.ownID++
 	gossiper.idMutex.Unlock()
 	return id
 }

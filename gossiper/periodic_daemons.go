@@ -41,11 +41,10 @@ func (gossiper *Gossiper) createRouteRumor() {
 	packet := &messages.GossipPacket{
 		Rumor: &messages.RumorMessage{
 			Origin: gossiper.Name,
-			ID:     gossiper.getOwnID(),
+			ID:     gossiper.getAndIncrementOwnID(),
 			Text:   "",
 		},
 	}
-	gossiper.incrementOwnID()
 	// Add our own address to the routing table.
 	gossiper.receivedRumor(packet.Rumor)
 }
