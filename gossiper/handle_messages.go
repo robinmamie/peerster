@@ -317,13 +317,16 @@ func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequ
 							Origin: reply.Origin,
 						})
 						gossiper.fileDestinations.Store(hexMetaHash, reply.Origin)
-						if len(matchList) == 2 {
-							gossiper.searchFinished <- true
-							fmt.Println("SEARCH FINISHED")
-							return
-						}
 					}
 				}
+			}
+			if len(matchList) >= 2 {
+				select {
+				case gossiper.searchFinished <- true:
+				default:
+				}
+				fmt.Println("SEARCH FINISHED")
+				return
 			}
 		}
 	}
