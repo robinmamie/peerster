@@ -255,6 +255,12 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 	return false
 }
 
+type match struct {
+	Hash   string
+	Name   string
+	Origin string
+}
+
 func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequest, budgetIsUserDefined bool) {
 	budget := request.Budget
 	gossiper.handleSearchRequest(request, "")
@@ -280,8 +286,8 @@ func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequ
 			}
 		}()
 	}
-	matches := 0
-	matchMap := make(map[string]string)
+
+	var matchList []match = nil
 	for {
 		// TODO add timer to kill process when nothing comes back
 		select {
@@ -291,22 +297,27 @@ func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequ
 				for _, v := range results.ChunkMap {
 					chunkMap = append(chunkMap, strconv.FormatUint(v, 10))
 				}
+				hexMetaHash := tools.BytesToHexString(results.MetafileHash)
 				chunkList := strings.Join(chunkMap, ",")
 				fmt.Print("FOUND match ", results.FileName, " at ", reply.Origin,
-					" metafile=", tools.BytesToHexString(results.MetafileHash),
+					" metafile=", hexMetaHash,
 					" chunks=", chunkList, "\n")
 
 				if results.ChunkCount == (uint64)(len(results.ChunkMap)) {
-					hexMetaHash := tools.BytesToHexString(results.MetafileHash)
 					fullMatch := true
-					if node, ok := matchMap[hexMetaHash]; ok && node == reply.Origin {
-						fullMatch = false
+					for _, m := range matchList {
+						if m.Hash == hexMetaHash && m.Name == results.FileName && m.Origin == reply.Origin {
+							fullMatch = false
+						}
 					}
-					matchMap[hexMetaHash] = reply.Origin
 					if fullMatch {
-						matches++
+						matchList = append(matchList, match{
+							Hash:   hexMetaHash,
+							Name:   results.FileName,
+							Origin: reply.Origin,
+						})
 						gossiper.fileDestinations.Store(hexMetaHash, reply.Origin)
-						if matches == 2 {
+						if len(matchList) == 2 {
 							gossiper.searchFinished <- true
 							fmt.Println("SEARCH FINISHED")
 							return
