@@ -306,7 +306,7 @@ func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequ
 				if results.ChunkCount == (uint64)(len(results.ChunkMap)) {
 					fullMatch := true
 					for _, m := range matchList {
-						if m.Hash == hexMetaHash && m.Name == results.FileName {
+						if m.Hash == hexMetaHash && m.Name == results.FileName && m.Origin == reply.Origin {
 							fullMatch = false
 						}
 					}
