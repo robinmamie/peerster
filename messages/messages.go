@@ -6,17 +6,21 @@ type Message struct {
 	Destination *string
 	File        *string
 	Request     *[]byte
+	Keywords    *[]string
+	Budget      uint64
 }
 
 // GossipPacket is used to store different messages and
 // are sent between gossipers.
 type GossipPacket struct {
-	Simple      *SimpleMessage
-	Rumor       *RumorMessage
-	Status      *StatusPacket
-	Private     *PrivateMessage
-	DataRequest *DataRequest
-	DataReply   *DataReply
+	Simple        *SimpleMessage
+	Rumor         *RumorMessage
+	Status        *StatusPacket
+	Private       *PrivateMessage
+	DataRequest   *DataRequest
+	DataReply     *DataReply
+	SearchRequest *SearchRequest
+	SearchReply   *SearchReply
 }
 
 // SimpleMessage stores the information about the original sender,
@@ -61,6 +65,21 @@ func (sp StatusPacket) IsEqual(thatMap map[string]uint32) bool {
 		}
 	}
 	return true
+}
+
+// SearchRequest represents a search request to be processed.
+type SearchRequest struct {
+	Origin   string
+	Budget   uint64
+	Keywords []string
+}
+
+// SearchResult contains the results of a search
+type SearchResult struct {
+	FileName     string
+	MetafileHash []byte
+	ChunkMap     []uint64
+	ChunkCount   uint64
 }
 
 // PointToPoint represents all point to point messages. It is used to handle
@@ -161,5 +180,35 @@ func (dr *DataReply) DecrementHopLimit() {
 func (dr *DataReply) CreatePacket() *GossipPacket {
 	return &GossipPacket{
 		DataReply: dr,
+	}
+}
+
+// SearchReply answers to a SearchRequest
+type SearchReply struct {
+	Origin      string
+	Destination string
+	HopLimit    uint32
+	Results     []*SearchResult
+}
+
+// GetDestination gives the destination of the message
+func (sr *SearchReply) GetDestination() string {
+	return sr.Destination
+}
+
+// GetHopLimit gives the current HopLimit of the message
+func (sr *SearchReply) GetHopLimit() uint32 {
+	return sr.HopLimit
+}
+
+// DecrementHopLimit decrements the current HopLimit of the message
+func (sr *SearchReply) DecrementHopLimit() {
+	sr.HopLimit--
+}
+
+// CreatePacket creates a packet from the current message
+func (sr *SearchReply) CreatePacket() *GossipPacket {
+	return &GossipPacket{
+		SearchReply: sr,
 	}
 }

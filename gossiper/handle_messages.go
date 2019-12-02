@@ -2,7 +2,11 @@ package gossiper
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/robinmamie/Peerster/files"
@@ -39,7 +43,10 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 			expectedRaw, _ := gossiper.expected.Load(target)
 			expected := expectedRaw.(chan bool)
 			for len(expected) > 0 {
-				<-expected
+				select {
+				case <-expected:
+				default:
+				}
 			}
 
 			// Send packet to correct channel, as many times as possible
@@ -108,7 +115,12 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 
 	// Index the file.
 	metaFile := reply.Data
-	gossiper.indexedFiles.Store(tools.BytesToHexString(reply.HashValue), metaFile)
+	metadataFile := files.FileMetadata{
+		FileName: fileName,
+		MetaFile: metaFile,
+		MetaHash: reply.HashValue,
+	}
+	gossiper.indexedFiles.Store(tools.BytesToHexString(reply.HashValue), metadataFile)
 
 	// The metaFileList contains all hashes of all concerned chunks.
 	var metaFileList []string
@@ -186,9 +198,9 @@ func (gossiper *Gossiper) handleDataRequest(request *messages.DataRequest, fileN
 	if gossiper.ptpMessageReachedDestination(request) {
 		requestedHash := tools.BytesToHexString(request.HashValue)
 		// Send corresponding DataReply back
-		if metaFile, ok := gossiper.indexedFiles.Load(requestedHash); ok {
+		if metadataFile, ok := gossiper.indexedFiles.Load(requestedHash); ok {
 			// Send meta-file
-			gossiper.sendDataReply(request, metaFile.([]byte))
+			gossiper.sendDataReply(request, metadataFile.(*files.FileMetadata).MetaFile)
 		} else if chunk, ok := gossiper.fileChunks.Load(requestedHash); ok {
 			// Send chunk data
 			gossiper.sendDataReply(request, chunk.([]byte))
@@ -219,7 +231,10 @@ func (gossiper *Gossiper) handleDataReply(reply *messages.DataReply) {
 	if gossiper.ptpMessageReachedDestination(reply) {
 		gossiper.dataChannels.Range(func(key interface{}, value interface{}) bool {
 			channel, _ := gossiper.dataChannels.Load(key)
-			channel.(chan *messages.DataReply) <- reply
+			select {
+			case channel.(chan *messages.DataReply) <- reply:
+			default:
+			}
 			return true
 		})
 	}
@@ -238,4 +253,208 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 		}
 	}
 	return false
+}
+
+func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequest) {
+	budget := request.Budget
+	gossiper.handleSearchRequest(request, "")
+	// Periodic increase of budget
+	go func() {
+		timeout := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-timeout.C:
+				if budget == 32 {
+					return
+				}
+				budget = budget * 2
+				if budget > 32 {
+					budget = 32
+				}
+				request.Budget = budget
+				gossiper.handleSearchRequest(request, "")
+			case <-gossiper.searchFinished:
+				return
+			}
+		}
+	}()
+	matches := 0
+	for {
+		// TODO add timer to kill process when nothing comes back
+		select {
+		case reply := <-gossiper.searchReply:
+			for _, results := range reply.Results {
+				chunkMap := []string{}
+				for _, v := range results.ChunkMap {
+					chunkMap = append(chunkMap, strconv.FormatUint(v, 10))
+				}
+				chunkList := strings.Join(chunkMap, ",")
+				fmt.Print("FOUND match ", results.FileName, " at ", reply.Origin,
+					" metafile=", tools.BytesToHexString(results.MetafileHash),
+					" chunks=", chunkList, "\n")
+
+				if results.ChunkCount == (uint64)(len(results.ChunkMap)) {
+					matches++
+					gossiper.fileDestinations.Store(tools.BytesToHexString(results.MetafileHash), reply.Origin)
+					if matches == 2 {
+						gossiper.searchFinished <- true
+						fmt.Println("SEARCH FINISHED")
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
+func (gossiper *Gossiper) handleSearchRequest(request *messages.SearchRequest, sender string) {
+	if gossiper.requestCollision(request) {
+		return
+	}
+	gossiper.processSearch(request)
+	request.Budget--
+	if request.Budget > 0 {
+		randomPeerList := gossiper.getRandomPeerList(sender)
+		if request.Budget <= (uint64)(len(randomPeerList)) {
+			gossiper.forwardSearchRequest(request, randomPeerList[:len(randomPeerList)])
+		} else {
+			gossiper.forwardSearchRequest(request, randomPeerList)
+		}
+	}
+}
+
+func (gossiper *Gossiper) requestCollision(request *messages.SearchRequest) bool {
+	listening := true
+	for listening {
+		select {
+		case gossiper.searchRequestLookup <- request:
+		default:
+		}
+		select {
+		case conflict := <-gossiper.searchRequestTimeout:
+			if conflict {
+				return true
+			}
+		default:
+			listening = false
+		}
+	}
+	go gossiper.listenForCollision(request)
+	return false
+}
+
+func (gossiper *Gossiper) listenForCollision(request *messages.SearchRequest) {
+	timeout := time.NewTicker(500 * time.Millisecond)
+	for {
+		select {
+		case otherRequest := <-gossiper.searchRequestLookup:
+			if otherRequest.Origin == request.Origin && len(otherRequest.Keywords) == len(request.Keywords) {
+				matching := true
+				for i, k := range otherRequest.Keywords {
+					if k != request.Keywords[i] {
+						matching = false
+						select {
+						case gossiper.searchRequestTimeout <- false:
+						default:
+						}
+						break
+					}
+				}
+				if matching {
+					select {
+					case gossiper.searchRequestTimeout <- true:
+					default:
+					}
+				}
+			}
+		case <-timeout.C:
+			return
+		}
+	}
+}
+
+func (gossiper *Gossiper) processSearch(request *messages.SearchRequest) {
+	var results []*messages.SearchResult = nil
+	for _, regex := range request.Keywords {
+		gossiper.indexedFiles.Range(func(key interface{}, value interface{}) bool {
+			name := value.(*files.FileMetadata).FileName
+			match, _ := regexp.MatchString(regex, name)
+			// TODO handle error
+			if match {
+				hash, _ := hex.DecodeString(key.(string))
+				// TODO handle error
+				results = append(results, &messages.SearchResult{
+					FileName:     name,
+					MetafileHash: hash,
+				})
+			}
+			return !match
+		})
+	}
+
+	for i, r := range results {
+		chunkMap, chunkCount := gossiper.getChunkMap(r.MetafileHash)
+		results[i].ChunkMap = chunkMap
+		results[i].ChunkCount = chunkCount
+	}
+
+	if results != nil {
+		gossiper.handleSearchReply(&messages.SearchReply{
+			Origin:      gossiper.Name,
+			Destination: request.Origin,
+			HopLimit:    hopLimit,
+			Results:     results,
+		})
+	}
+}
+
+func (gossiper *Gossiper) getChunkMap(metaHash []byte) ([]uint64, uint64) {
+	metadata, _ := gossiper.indexedFiles.Load(tools.BytesToHexString(metaHash))
+	metaFile := metadata.(*files.FileMetadata).MetaFile
+	// TODO check error
+	chunkNumber := len(metaFile) / files.SHA256ByteSize
+	var chunkMap []uint64 = nil
+	for i := 1; i <= chunkNumber; i++ {
+		chunkHash := metaFile[files.SHA256ByteSize*(i-1) : files.SHA256ByteSize*i]
+		chunkHex := tools.BytesToHexString(chunkHash)
+		_, ok := gossiper.fileChunks.Load(chunkHex)
+		if ok {
+			chunkMap = append(chunkMap, (uint64)(i))
+		}
+	}
+	return chunkMap, (uint64)(chunkNumber)
+}
+
+func (gossiper *Gossiper) forwardSearchRequest(request *messages.SearchRequest, peers []string) {
+	numberOfPeers := (uint64)(len(peers))
+	if numberOfPeers == 0 {
+		return
+	}
+	baseBudget := request.Budget / numberOfPeers
+	remainingBudget := request.Budget % numberOfPeers
+	for i, peer := range peers {
+		bonusPoint := (uint64)(0)
+		if (uint64)(i) < remainingBudget {
+			bonusPoint++
+		}
+		gossiper.sendGossipPacket(peer, &messages.GossipPacket{
+			SearchRequest: &messages.SearchRequest{
+				Origin:   request.Origin,
+				Keywords: request.Keywords,
+				Budget:   baseBudget + bonusPoint,
+			},
+		})
+	}
+}
+
+func (gossiper *Gossiper) handleSearchReply(reply *messages.SearchReply) {
+	if gossiper.ptpMessageReachedDestination(reply) {
+		for {
+			select {
+			case gossiper.searchReply <- reply:
+			default:
+				return
+			}
+		}
+	}
 }

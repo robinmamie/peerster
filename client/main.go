@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/robinmamie/Peerster/files"
 
@@ -22,11 +23,15 @@ func main() {
 	var dest string
 	var file string
 	var request string
+	var keywords string
+	var budget uint64
 	flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
 	flag.StringVar(&textMsg, "msg", "", "message to be sent; if the -dest flag is present, this is a private message, otherwise it's a rumor message")
 	flag.StringVar(&dest, "dest", "", "destination for the private message; can be omitted")
 	flag.StringVar(&file, "file", "", "file to be indexed by the gossiper")
 	flag.StringVar(&request, "request", "", "request a chunk or metafile of this hash")
+	flag.StringVar(&keywords, "keywords", "", "keywords used for the file search")
+	flag.Uint64Var(&budget, "budget", 2, "budget used for the file search")
 	flag.Parse()
 
 	checkFlags(textMsg, dest, file, request)
@@ -36,12 +41,19 @@ func main() {
 		byteRequest = checkRequest(request)
 	}
 
+	var splitKeywords []string = nil
+	if keywords != "" {
+		splitKeywords = strings.Split(keywords, ",")
+	}
+
 	// Create and encode packet
 	msg := messages.Message{
 		Text:        textMsg,
 		Destination: &dest,
 		File:        &file,
 		Request:     &byteRequest,
+		Keywords:    &splitKeywords,
+		Budget:      budget,
 	}
 	packetBytes, err := protobuf.Encode(&msg)
 	tools.Check(err)
@@ -73,8 +85,8 @@ func checkFlags(textMsg string, dest string, file string, request string) {
 	impossibleCombination := destDefined && !textDefined && !fileDefined && !requestDefined
 	// Text and file/request defined
 	impossibleCombination = impossibleCombination || (textDefined && (fileDefined || requestDefined))
-	// Request defined without file name or destination
-	impossibleCombination = impossibleCombination || (requestDefined && (!fileDefined || !destDefined))
+	// Request defined without file name
+	impossibleCombination = impossibleCombination || (requestDefined && !fileDefined)
 	// Destintation defined when only file defined
 	impossibleCombination = impossibleCombination || (fileDefined && destDefined && !requestDefined)
 

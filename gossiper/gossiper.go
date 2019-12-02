@@ -27,9 +27,13 @@ type Gossiper struct {
 	simple bool
 	Peers  []string
 	// Channels used to communicate between threads
-	statusWaiting sync.Map
-	expected      sync.Map
-	dataChannels  sync.Map
+	statusWaiting        sync.Map
+	expected             sync.Map
+	dataChannels         sync.Map
+	searchRequestLookup  chan *messages.SearchRequest
+	searchReply          chan *messages.SearchReply
+	searchRequestTimeout chan bool
+	searchFinished       chan bool
 	// Message history
 	msgHistory      sync.Map
 	allMessages     []*messages.GossipPacket // Used for the GUI
@@ -43,8 +47,9 @@ type Gossiper struct {
 	destinationList     []string // Used for the GUI
 	latestDestinationID int      // Used for the GUI
 	// File logic (files indexed and all chunks)
-	indexedFiles sync.Map
-	fileChunks   sync.Map
+	indexedFiles     sync.Map
+	fileChunks       sync.Map
+	fileDestinations sync.Map
 	// Lock used to synchronize writing on the vector clock and the history
 	updateMutex      *sync.Mutex
 	peerMutex        *sync.Mutex
@@ -67,21 +72,25 @@ func NewGossiper(address, name string, uiPort string, simple bool, peers []strin
 	tools.Check(err)
 
 	gossiper := &Gossiper{
-		Address:          address,
-		conn:             udpConn,
-		cliConn:          cliConn,
-		UIPort:           uiPort,
-		Name:             name,
-		simple:           simple,
-		allMessages:      make([]*messages.GossipPacket, 0),
-		latestMessageID:  0,
-		vectorClock:      &messages.StatusPacket{Want: nil},
-		ownID:            1,
-		destinationList:  make([]string, 0),
-		updateMutex:      &sync.Mutex{},
-		peerMutex:        &sync.Mutex{},
-		idMutex:          &sync.Mutex{},
-		destinationMutex: &sync.Mutex{},
+		Address:              address,
+		conn:                 udpConn,
+		cliConn:              cliConn,
+		UIPort:               uiPort,
+		Name:                 name,
+		simple:               simple,
+		searchRequestLookup:  make(chan *messages.SearchRequest),
+		searchReply:          make(chan *messages.SearchReply),
+		searchRequestTimeout: make(chan bool),
+		searchFinished:       make(chan bool),
+		allMessages:          make([]*messages.GossipPacket, 0),
+		latestMessageID:      0,
+		vectorClock:          &messages.StatusPacket{Want: nil},
+		ownID:                1,
+		destinationList:      make([]string, 0),
+		updateMutex:          &sync.Mutex{},
+		peerMutex:            &sync.Mutex{},
+		idMutex:              &sync.Mutex{},
+		destinationMutex:     &sync.Mutex{},
 	}
 
 	// Create peers (and channels for inter-thread communications).
@@ -137,4 +146,16 @@ func (gossiper *Gossiper) getAndIncrementOwnID() uint32 {
 	gossiper.ownID++
 	gossiper.idMutex.Unlock()
 	return id
+}
+
+func (gossiper *Gossiper) getRandomPeerList(sender string) []string {
+	randomOrder := rand.Perm(len(gossiper.Peers))
+	var randomPeerList []string = nil
+	for _, v := range randomOrder {
+		el := gossiper.Peers[v]
+		if el != sender {
+			randomPeerList = append(randomPeerList, el)
+		}
+	}
+	return randomPeerList
 }

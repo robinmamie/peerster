@@ -13,20 +13,19 @@ import (
 func (gossiper *Gossiper) listenClient() {
 	for {
 		message := gossiper.getMessage()
-
 		if gossiper.simple {
 			gossiper.createSimple(message)
 		} else {
-			if message.Destination != nil && *message.Destination != "" {
-				if message.File != nil && *message.File != "" {
-					if message.Request != nil && *message.Request != nil {
-						go gossiper.createRequest(message)
-					}
-				} else {
-					go gossiper.createPrivate(message)
-				}
+			if message.Keywords != nil {
+				go gossiper.createSearch(message)
+			} else if message.Destination != nil && *message.Destination != "" {
+				go gossiper.createPrivate(message)
 			} else if message.File != nil && *message.File != "" {
-				go gossiper.indexFile(*message.File)
+				if message.Request != nil && *message.Request != nil && len(*message.Request) != 0 {
+					go gossiper.createRequest(message)
+				} else {
+					go gossiper.indexFile(*message.File)
+				}
 			} else {
 				go gossiper.createRumor(message)
 			}
@@ -47,9 +46,13 @@ func (gossiper *Gossiper) createSimple(message *messages.Message) {
 // createRequest creates a first DataRequest and starts the downloading of the
 // file.
 func (gossiper *Gossiper) createRequest(message *messages.Message) {
+	destination, ok := gossiper.fileDestinations.Load(tools.BytesToHexString(*message.Request))
+	if !ok {
+		return
+	}
 	request := &messages.DataRequest{
 		Origin:      gossiper.Name,
-		Destination: *message.Destination,
+		Destination: destination.(string),
 		HopLimit:    hopLimit,
 		HashValue:   *message.Request,
 	}
@@ -59,7 +62,7 @@ func (gossiper *Gossiper) createRequest(message *messages.Message) {
 // indexFile indexes a local file and saves all its chunks.
 func (gossiper *Gossiper) indexFile(fileName string) {
 	fileMetaData, chunks := files.NewFileMetadata(fileName)
-	gossiper.indexedFiles.Store(tools.BytesToHexString(fileMetaData.MetaHash), fileMetaData.MetaFile)
+	gossiper.indexedFiles.Store(tools.BytesToHexString(fileMetaData.MetaHash), fileMetaData)
 
 	// Store chunks in gossiper
 	if chunks != nil {
@@ -95,4 +98,13 @@ func (gossiper *Gossiper) createRumor(message *messages.Message) {
 		Text:   message.Text,
 	}
 	gossiper.receivedRumor(rumor)
+}
+
+func (gossiper *Gossiper) createSearch(message *messages.Message) {
+	request := &messages.SearchRequest{
+		Origin:   gossiper.Name,
+		Budget:   message.Budget,
+		Keywords: *message.Keywords,
+	}
+	gossiper.handleClientSearchRequest(request)
 }

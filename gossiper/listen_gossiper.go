@@ -32,6 +32,10 @@ func (gossiper *Gossiper) listenGossiper() {
 			go gossiper.handleDataRequest(packet.DataRequest, "", -1)
 		case packet.DataReply != nil:
 			go gossiper.handleDataReply(packet.DataReply)
+		case packet.SearchRequest != nil:
+			go gossiper.handleSearchRequest(packet.SearchRequest, address)
+		case packet.SearchReply != nil:
+			go gossiper.handleSearchReply(packet.SearchReply)
 		}
 	}
 }
