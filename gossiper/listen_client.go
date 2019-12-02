@@ -2,6 +2,7 @@ package gossiper
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/robinmamie/Peerster/tools"
 
@@ -101,10 +102,19 @@ func (gossiper *Gossiper) createRumor(message *messages.Message) {
 }
 
 func (gossiper *Gossiper) createSearch(message *messages.Message) {
+	budget := 2
+	userDefined := false
+	if message.Budget != nil {
+		b, err := strconv.Atoi(*message.Budget)
+		if err == nil {
+			budget = b
+			userDefined = true
+		}
+	}
 	request := &messages.SearchRequest{
 		Origin:   gossiper.Name,
-		Budget:   message.Budget,
+		Budget:   (uint64)(budget),
 		Keywords: *message.Keywords,
 	}
-	gossiper.handleClientSearchRequest(request)
+	gossiper.handleClientSearchRequest(request, userDefined)
 }

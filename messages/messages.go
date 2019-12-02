@@ -7,7 +7,7 @@ type Message struct {
 	File        *string
 	Request     *[]byte
 	Keywords    *[]string
-	Budget      uint64
+	Budget      *string
 }
 
 // GossipPacket is used to store different messages and

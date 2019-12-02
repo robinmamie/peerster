@@ -255,29 +255,31 @@ func (gossiper *Gossiper) ptpMessageReachedDestination(ptpMessage messages.Point
 	return false
 }
 
-func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequest) {
+func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequest, budgetIsUserDefined bool) {
 	budget := request.Budget
 	gossiper.handleSearchRequest(request, "")
 	// Periodic increase of budget
-	go func() {
-		timeout := time.NewTicker(time.Second)
-		for {
-			select {
-			case <-timeout.C:
-				if budget == 32 {
+	if !budgetIsUserDefined {
+		go func() {
+			timeout := time.NewTicker(time.Second)
+			for {
+				select {
+				case <-timeout.C:
+					if budget == 32 {
+						return
+					}
+					budget = budget * 2
+					if budget > 32 {
+						budget = 32
+					}
+					request.Budget = budget
+					gossiper.handleSearchRequest(request, "")
+				case <-gossiper.searchFinished:
 					return
 				}
-				budget = budget * 2
-				if budget > 32 {
-					budget = 32
-				}
-				request.Budget = budget
-				gossiper.handleSearchRequest(request, "")
-			case <-gossiper.searchFinished:
-				return
 			}
-		}
-	}()
+		}()
+	}
 	matches := 0
 	for {
 		// TODO add timer to kill process when nothing comes back

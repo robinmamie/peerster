@@ -24,14 +24,14 @@ func main() {
 	var file string
 	var request string
 	var keywords string
-	var budget uint64
+	var budget string
 	flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
 	flag.StringVar(&textMsg, "msg", "", "message to be sent; if the -dest flag is present, this is a private message, otherwise it's a rumor message")
 	flag.StringVar(&dest, "dest", "", "destination for the private message; can be omitted")
 	flag.StringVar(&file, "file", "", "file to be indexed by the gossiper")
 	flag.StringVar(&request, "request", "", "request a chunk or metafile of this hash")
 	flag.StringVar(&keywords, "keywords", "", "keywords used for the file search")
-	flag.Uint64Var(&budget, "budget", 2, "budget used for the file search")
+	flag.StringVar(&budget, "budget", "", "budget used for the file search")
 	flag.Parse()
 
 	checkFlags(textMsg, dest, file, request)
@@ -53,7 +53,7 @@ func main() {
 		File:        &file,
 		Request:     &byteRequest,
 		Keywords:    &splitKeywords,
-		Budget:      budget,
+		Budget:      &budget,
 	}
 	packetBytes, err := protobuf.Encode(&msg)
 	tools.Check(err)
