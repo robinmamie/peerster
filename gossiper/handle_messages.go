@@ -404,7 +404,6 @@ func (gossiper *Gossiper) processSearch(request *messages.SearchRequest) {
 	for _, regex := range request.Keywords {
 		gossiper.indexedFiles.Range(func(key interface{}, value interface{}) bool {
 			name := value.(*files.FileMetadata).FileName
-			fmt.Println(name)
 			match, _ := regexp.MatchString(regex, name)
 			// TODO handle error
 			if match {
