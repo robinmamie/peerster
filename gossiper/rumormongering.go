@@ -62,7 +62,10 @@ func (gossiper *Gossiper) rumormonger(rumor *messages.RumorMessage, target strin
 				for _, sp := range status.Want {
 					if sp.Identifier == packet.Rumor.Origin && sp.NextID > packet.Rumor.ID {
 						// Announce that the package is expected
-						expected <- true
+						select {
+						case expected <- true:
+						default:
+						}
 						// We have to compare vectors first, in case we/they have somthing interesting.
 						// We flip the coin iff we are level. Otherwise, there is no mention of any coin in the specs.
 						if gossiper.compareVectors(status, target) && tools.FlipCoin() {
