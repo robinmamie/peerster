@@ -157,6 +157,15 @@ func (gossiper *Gossiper) updateVectorClock(g messages.Gossiping, status message
 					gossiper.updateMutex.Unlock()
 					_, stillPresent = gossiper.msgHistory.Load(status)
 				}
+				// Signal update
+				update := true
+				for update {
+					select {
+					case gossiper.vectorUpdate <- true:
+					default:
+						update = false
+					}
+				}
 			}
 			// else do not update vector clock, will be done once the sequence
 			// is completed
@@ -175,6 +184,16 @@ func (gossiper *Gossiper) updateVectorClock(g messages.Gossiping, status message
 	gossiper.updateMutex.Lock()
 	gossiper.vectorClock.Want = append(gossiper.vectorClock.Want, ps)
 	gossiper.updateMutex.Unlock()
+
+	// Signal update
+	update := true
+	for update {
+		select {
+		case gossiper.vectorUpdate <- true:
+		default:
+			update = false
+		}
+	}
 }
 
 // updateRoutingTable takes a RumorMessage and updates the routing table

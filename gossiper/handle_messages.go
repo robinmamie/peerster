@@ -23,14 +23,12 @@ func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
 }
 
 // handleRumor begins the rumormongering logic when we get a rumor message.
-func (gossiper *Gossiper) handleGossip(g messages.Gossiping, address string) {
-	gossiper.updateRoutingTable(g, address)
-	if rumor, ok := g.(*messages.RumorMessage); ok {
-		fmt.Println("RUMOR origin", rumor.Origin, "from",
-			address, "ID", rumor.ID, "contents",
-			rumor.Text)
-	}
-	gossiper.receivedGossip(g, false)
+func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address string) {
+	gossiper.updateRoutingTable(rumor, address)
+	//fmt.Println("RUMOR origin", rumor.Origin, "from",
+	//	address, "ID", rumor.ID, "contents",
+	//	rumor.Text)
+	gossiper.receivedGossip(rumor, false)
 	gossiper.sendCurrentStatus(address)
 }
 
@@ -39,7 +37,6 @@ func (gossiper *Gossiper) handleGossip(g messages.Gossiping, address string) {
 func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address string) {
 	// Wake up correct subroutine if status received
 	for _, target := range gossiper.Peers {
-
 		if target == address {
 			// Empty expected channel before
 			expectedRaw, _ := gossiper.expected.Load(target)
@@ -86,12 +83,7 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 // destined for this node in particular.
 func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 	if gossiper.ptpMessageReachedDestination(private) {
-
 		gossiper.allMessages = append(gossiper.allMessages, &messages.GossipPacket{Private: private})
-
-		fmt.Println("PRIVATE origin", private.Origin,
-			"hop-limit", private.HopLimit,
-			"contents", private.Text)
 	}
 }
 
@@ -500,6 +492,20 @@ func (gossiper *Gossiper) handleSearchReply(reply *messages.SearchReply) {
 			default:
 				return
 			}
+		}
+	}
+}
+
+func (gossiper *Gossiper) handleTLCMessage(tlc *messages.TLCMessage, address string) {
+	gossiper.updateRoutingTable(tlc, address)
+	for {
+		if tlc.VectorClock.IsIncludedIn(gossiper.vectorClock) {
+			go gossiper.receivedGossip(tlc, false)
+			gossiper.sendCurrentStatus(address)
+			return
+		}
+		select {
+		case <-gossiper.vectorUpdate:
 		}
 	}
 }

@@ -23,7 +23,7 @@ func (gossiper *Gossiper) listenGossiper() {
 		case packet.Simple != nil:
 			go gossiper.handleSimple(packet.Simple)
 		case packet.Rumor != nil:
-			go gossiper.handleGossip(packet.Rumor, address)
+			go gossiper.handleRumor(packet.Rumor, address)
 		case packet.Status != nil:
 			go gossiper.handleStatus(packet.Status, address)
 		case packet.Private != nil:
@@ -37,7 +37,7 @@ func (gossiper *Gossiper) listenGossiper() {
 		case packet.SearchReply != nil:
 			go gossiper.handleSearchReply(packet.SearchReply)
 		case packet.TLCMessage != nil:
-			go gossiper.handleGossip(packet.TLCMessage, address)
+			go gossiper.handleTLCMessage(packet.TLCMessage, address)
 		case packet.Ack != nil:
 			go gossiper.handleAck(packet.Ack)
 		}

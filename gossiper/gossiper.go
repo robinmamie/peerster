@@ -43,6 +43,7 @@ type Gossiper struct {
 	searchRequestTimeout chan bool
 	searchFinished       chan bool
 	ackBlock             chan *messages.TLCAck
+	vectorUpdate         chan bool
 	// Message history
 	msgHistory      sync.Map
 	allMessages     []*messages.GossipPacket // Used for the GUI
@@ -235,10 +236,12 @@ func (gossiper *Gossiper) roundCounting() {
 			fmt.Println("ADVANCING TO round", gossiper.myTime,
 				"BASED ON CONFIRMED MESSAGES", confPairs)
 			gossiper.gossipWC = false
-			ticker := time.NewTicker(time.Millisecond)
-			select {
-			case gossiper.canGossipWC <- true:
-			case <-ticker.C:
+			if !gossiper.hw3ex4 || gossiper.myTime%3 == 0 {
+				ticker := time.NewTicker(time.Millisecond)
+				select {
+				case gossiper.canGossipWC <- true:
+				case <-ticker.C:
+				}
 			}
 			majorityConfirmedMessages = false
 		}
@@ -254,6 +257,5 @@ func (gossiper *Gossiper) formatConfirmedPairs(roundConfirmed []*messages.TLCMes
 			i++
 		}
 	}
-
 	return strings.Join(pairs, ", ")
 }

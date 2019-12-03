@@ -97,12 +97,19 @@ func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
 			MetafileHash: fileMetaData.MetaHash,
 		},
 	}
+	vc := &messages.StatusPacket{
+		Want: make([]messages.PeerStatus, len(gossiper.vectorClock.Want)),
+	}
+	copy(vc.Want, gossiper.vectorClock.Want)
 	tlcID := gossiper.getAndIncrementOwnID()
 	tlc := &messages.TLCMessage{
 		Origin:    gossiper.Name,
 		ID:        tlcID,
 		Confirmed: -1,
 		TxBlock:   bp,
+	}
+	if gossiper.hw3ex3 {
+		tlc.VectorClock = vc
 	}
 	if gossiper.hw3ex4 {
 		rand.Seed(time.Now().UTC().UnixNano())
@@ -120,12 +127,20 @@ func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
 			}
 			fmt.Println("RE-BROADCAST ID", tlc.ID,
 				"WITNESSES", strings.Join(witnesses, ","))
-			gossiper.receivedGossip(&messages.TLCMessage{
+			vc := &messages.StatusPacket{
+				Want: make([]messages.PeerStatus, len(gossiper.vectorClock.Want)),
+			}
+			copy(vc.Want, gossiper.vectorClock.Want)
+			conf := &messages.TLCMessage{
 				Origin:    tlc.Origin,
 				ID:        gossiper.getAndIncrementOwnID(),
 				Confirmed: (int)(tlc.ID),
 				TxBlock:   tlc.TxBlock,
-			}, false)
+			}
+			if gossiper.hw3ex3 {
+				conf.VectorClock = vc
+			}
+			gossiper.receivedGossip(conf, false)
 			return
 		}
 		select {
@@ -143,9 +158,6 @@ func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
 
 // createPrivate creates a PrivateMessage and forwards it.
 func (gossiper *Gossiper) createPrivate(message *messages.Message) {
-	fmt.Println("CLIENT MESSAGE", message.Text,
-		"dest", *message.Destination)
-
 	private := &messages.PrivateMessage{
 		Origin:      gossiper.Name,
 		ID:          0, // No need to count

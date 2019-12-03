@@ -69,6 +69,27 @@ func (sp StatusPacket) IsEqual(thatMap map[string]uint32) bool {
 	return true
 }
 
+// IsIncludedIn tests whether the first status packet is entirely in the other
+// one.
+func (sp *StatusPacket) IsIncludedIn(other *StatusPacket) bool {
+	this := sp.Want
+	that := other.Want
+	if len(this) > len(that) {
+		return false
+	}
+	thatMap := make(map[string]uint32)
+	for _, e := range that {
+		thatMap[e.Identifier] = e.NextID
+	}
+	for _, e := range this {
+		id, ok := thatMap[e.Identifier]
+		if !ok || id < e.NextID {
+			return false
+		}
+	}
+	return true
+}
+
 // SearchRequest represents a search request to be processed.
 type SearchRequest struct {
 	Origin   string
