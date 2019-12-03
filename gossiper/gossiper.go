@@ -27,6 +27,7 @@ type Gossiper struct {
 	simple bool
 	hw3ex2 bool
 	hw3ex3 bool
+	hw3ex4 bool
 	ackAll bool
 	Peers  []string
 	// Network information
@@ -75,7 +76,8 @@ type Gossiper struct {
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
 // list of peers.
 func NewGossiper(address, name string, uiPort string, peers []string, n uint64,
-	stubbornTimeout uint64, hopLimit uint32, simple bool, hw3ex2 bool, hw3ex3 bool, ackAll bool) *Gossiper {
+	stubbornTimeout uint64, hopLimit uint32, simple bool, hw3ex2 bool,
+	hw3ex3 bool, hw3ex4 bool, ackAll bool) *Gossiper {
 	// Creation of all necessary UDP sockets.
 	udpAddr, err := net.ResolveUDPAddr("udp4", address)
 	tools.Check(err)
@@ -96,6 +98,7 @@ func NewGossiper(address, name string, uiPort string, peers []string, n uint64,
 		simple:                 simple,
 		hw3ex2:                 hw3ex2,
 		hw3ex3:                 hw3ex3,
+		hw3ex4:                 hw3ex4,
 		ackAll:                 ackAll,
 		n:                      n,
 		stubbornTimeout:        stubbornTimeout,
@@ -200,9 +203,17 @@ func (gossiper *Gossiper) roundCounting() {
 			gossiper.gossipWC = true
 		case tlcConfirmed := <-gossiper.roundsUpdated:
 			roundRaw, _ := gossiper.rounds.Load(tlcConfirmed.Origin)
-			round := roundRaw.(int)
+			round := len(roundRaw.([]int)) - 1
 			if list, ok := roundConfirmed[round]; ok {
-				roundConfirmed[round] = append(list, tlcConfirmed)
+				present := false
+				for _, el := range list {
+					if el.Equals(tlcConfirmed) {
+						present = true
+					}
+				}
+				if !present {
+					roundConfirmed[round] = append(list, tlcConfirmed)
+				}
 			} else {
 				roundConfirmed[round] = []*messages.TLCMessage{tlcConfirmed}
 			}

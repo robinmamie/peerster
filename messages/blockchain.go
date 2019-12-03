@@ -28,6 +28,12 @@ type TLCMessage struct {
 	Fitness     float32
 }
 
+// Equals checks whether 2 TLCMessages are the same.
+func (tlc *TLCMessage) Equals(other *TLCMessage) bool {
+	return tlc.ID == other.ID &&
+		tlc.Origin == other.Origin
+}
+
 // TLCAck is used to acknowledge TLC messages
 type TLCAck PrivateMessage
 

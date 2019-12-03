@@ -24,6 +24,7 @@ func main() {
 	var simple bool
 	var hw3ex2 bool
 	var hw3ex3 bool
+	var hw3ex4 bool
 	var ackAll bool
 
 	flag.StringVar(&uiPort, "UIPort", "8080", "port for the UI client")
@@ -48,6 +49,8 @@ func main() {
 		"run gossiper in HW 3, ex 2 mode")
 	flag.BoolVar(&hw3ex3, "hw3ex3", false,
 		"run gossiper in HW 3, ex 3 mode")
+	flag.BoolVar(&hw3ex4, "hw3ex4", false,
+		"run gossiper in HW 3, ex 4 mode")
 	flag.BoolVar(&ackAll, "ackAll", false,
 		"ack all messages irrespective of their ID (used for HW 3, ex 3)")
 
@@ -62,8 +65,10 @@ func main() {
 	os.Mkdir("_Downloads", 0755)
 	os.Mkdir("_SharedFiles", 0755)
 
+	hw3ex3 = hw3ex3 || hw3ex4
+	hw3ex2 = hw3ex2 || hw3ex3
 	gossiper := gossiper.NewGossiper(gossipAddr, name, uiPort, peers, n, stubbornTimeout,
-		(uint32)(hopLimit), simple, hw3ex2, hw3ex3, ackAll)
+		(uint32)(hopLimit), simple, hw3ex2, hw3ex3, hw3ex4, ackAll)
 
 	go web.InitWebServer(gossiper, uiPort)
 	gossiper.Run(antiEntropy, rtimer)
