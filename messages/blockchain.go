@@ -26,6 +26,28 @@ type TLCMessage struct {
 // TLCAck is used to acknowledge TLC messages
 type TLCAck PrivateMessage
 
+// GetDestination gives the destination of the message
+func (ack *TLCAck) GetDestination() string {
+	return ack.Destination
+}
+
+// GetHopLimit gives the current HopLimit of the message
+func (ack *TLCAck) GetHopLimit() uint32 {
+	return ack.HopLimit
+}
+
+// DecrementHopLimit decrements the current HopLimit of the message
+func (ack *TLCAck) DecrementHopLimit() {
+	ack.HopLimit--
+}
+
+// CreatePacket creates a packet from the current message
+func (ack *TLCAck) CreatePacket() *GossipPacket {
+	return &GossipPacket{
+		Ack: ack,
+	}
+}
+
 // Gossiping represents all gossiping messages (rumor and TLCMessage)
 type Gossiping interface {
 	GetOrigin() string

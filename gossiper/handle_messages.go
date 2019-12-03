@@ -23,12 +23,14 @@ func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
 }
 
 // handleRumor begins the rumormongering logic when we get a rumor message.
-func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address string) {
-	gossiper.updateRoutingTable(rumor, address)
-	fmt.Println("RUMOR origin", rumor.Origin, "from",
-		address, "ID", rumor.ID, "contents",
-		rumor.Text)
-	gossiper.receivedGossip(rumor)
+func (gossiper *Gossiper) handleGossip(g messages.Gossiping, address string) {
+	gossiper.updateRoutingTable(g, address)
+	if rumor, ok := g.(*messages.RumorMessage); ok {
+		fmt.Println("RUMOR origin", rumor.Origin, "from",
+			address, "ID", rumor.ID, "contents",
+			rumor.Text)
+	}
+	gossiper.receivedGossip(g, false)
 	gossiper.sendCurrentStatus(address)
 }
 
@@ -93,6 +95,23 @@ func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 	}
 }
 
+// handleAck handles TLC acknowledgements.
+//
+// As for all other point to point messages, the function routes it if it is not
+// destined for this node in particular.
+func (gossiper *Gossiper) handleAck(ack *messages.TLCAck) {
+	if gossiper.ptpMessageReachedDestination(ack) {
+		sending := true
+		for sending {
+			select {
+			case gossiper.ackBlock <- ack:
+			default:
+				sending = false
+			}
+		}
+	}
+}
+
 // handleClientDataRequest handles all the logic behind downloading and
 // and reconstructing a file coming from a foreign peer.
 func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest, fileName string) {
@@ -134,7 +153,7 @@ func (gossiper *Gossiper) handleClientDataRequest(request *messages.DataRequest,
 		if _, ok := gossiper.fileChunks.Load(hexChunkHash); !ok {
 			// The chunk is absent from our table, so we download it.
 			// Reset hop limit
-			request.HopLimit = hopLimit
+			request.HopLimit = gossiper.hopLimit
 			gossiper.handleDataRequest(request, fileName, chunkNumber)
 			if reply := gossiper.waitForValidDataReply(request, fileHash, fileName, chunkNumber); reply != nil {
 				// Store chunk if valid answer.
@@ -216,7 +235,7 @@ func (gossiper *Gossiper) sendDataReply(request *messages.DataRequest, data []by
 	reply := &messages.DataReply{
 		Origin:      gossiper.Name,
 		Destination: request.Origin,
-		HopLimit:    hopLimit,
+		HopLimit:    gossiper.hopLimit,
 		HashValue:   request.HashValue,
 		Data:        data,
 	}
@@ -428,7 +447,7 @@ func (gossiper *Gossiper) processSearch(request *messages.SearchRequest) {
 		gossiper.handleSearchReply(&messages.SearchReply{
 			Origin:      gossiper.Name,
 			Destination: request.Origin,
-			HopLimit:    hopLimit,
+			HopLimit:    gossiper.hopLimit,
 			Results:     results,
 		})
 	}

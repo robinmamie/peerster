@@ -3,6 +3,8 @@ package gossiper
 import (
 	"fmt"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/robinmamie/Peerster/tools"
 
@@ -54,7 +56,7 @@ func (gossiper *Gossiper) createRequest(message *messages.Message) {
 	request := &messages.DataRequest{
 		Origin:      gossiper.Name,
 		Destination: destination.(string),
-		HopLimit:    hopLimit,
+		HopLimit:    gossiper.hopLimit,
 		HashValue:   *message.Request,
 	}
 	gossiper.handleClientDataRequest(request, *message.File)
@@ -74,6 +76,56 @@ func (gossiper *Gossiper) indexFile(fileName string) {
 			gossiper.fileChunks.Store(hexChunkHash, chunks[chunkNumber-1])
 		}
 	}
+
+	if gossiper.hw3ex2 {
+		gossiper.publish(fileMetaData)
+	}
+}
+
+func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
+	bp := messages.BlockPublish{
+		Transaction: messages.TxPublish{
+			Name:         fileMetaData.FileName,
+			Size:         fileMetaData.FileSize,
+			MetafileHash: fileMetaData.MetaHash,
+		},
+	}
+	tlcID := gossiper.getAndIncrementOwnID()
+	tlc := &messages.TLCMessage{
+		Origin:    gossiper.Name,
+		ID:        tlcID,
+		Confirmed: -1,
+		TxBlock:   bp,
+	}
+	gossiper.receivedGossip(tlc, false)
+	acknowledgements := make(map[string]bool)
+	acknowledgements[gossiper.Name] = true
+	ticker := time.NewTicker(time.Duration(gossiper.stubbornTimeout) * time.Second)
+	for {
+		if len(acknowledgements) > (int)(gossiper.n)-len(acknowledgements) {
+			var witnesses []string = nil
+			for k := range acknowledgements {
+				witnesses = append(witnesses, k)
+			}
+			fmt.Println("RE-BROADCAST ID", tlc.ID,
+				"WITNESSES", strings.Join(witnesses, ","))
+			gossiper.receivedGossip(&messages.TLCMessage{
+				Origin:    tlc.Origin,
+				ID:        gossiper.getAndIncrementOwnID(),
+				Confirmed: (int)(tlc.ID),
+				TxBlock:   tlc.TxBlock,
+			}, false)
+			return
+		}
+		select {
+		case <-ticker.C:
+			gossiper.receivedGossip(tlc, true)
+		case ack := <-gossiper.ackBlock:
+			if ack.ID == tlcID {
+				acknowledgements[ack.Origin] = true
+			}
+		}
+	}
 }
 
 // createPrivate creates a PrivateMessage and forwards it.
@@ -86,7 +138,7 @@ func (gossiper *Gossiper) createPrivate(message *messages.Message) {
 		ID:          0, // No need to count
 		Text:        message.Text,
 		Destination: *message.Destination,
-		HopLimit:    hopLimit,
+		HopLimit:    gossiper.hopLimit,
 	}
 	gossiper.handlePrivate(private)
 }
@@ -98,7 +150,7 @@ func (gossiper *Gossiper) createRumor(message *messages.Message) {
 		ID:     gossiper.getAndIncrementOwnID(),
 		Text:   message.Text,
 	}
-	gossiper.receivedGossip(rumor)
+	gossiper.receivedGossip(rumor, false)
 }
 
 func (gossiper *Gossiper) createSearch(message *messages.Message) {

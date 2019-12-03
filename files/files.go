@@ -19,7 +19,7 @@ const SHA256ByteSize int = 32
 // FileMetadata describes all the necessary information about a file.
 type FileMetadata struct {
 	FileName string
-	FileSize int
+	FileSize int64
 	MetaFile []byte
 	MetaHash []byte
 }
@@ -35,7 +35,7 @@ func NewFileMetadata(name string) (*FileMetadata, [][]byte) {
 
 	return &FileMetadata{
 		FileName: name,
-		FileSize: fileSize,
+		FileSize: (int64)(fileSize),
 		MetaFile: metaFile,
 		MetaHash: metaHash,
 	}, chunks

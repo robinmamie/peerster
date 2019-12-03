@@ -9,9 +9,6 @@ import (
 	"github.com/robinmamie/Peerster/tools"
 )
 
-// hopLimit defines the maximum number of hops.
-const hopLimit uint32 = 10
-
 // dataRequestTimeout sets the timeout of a data request packet
 const dataRequestTimeout int = 5
 
@@ -26,7 +23,13 @@ type Gossiper struct {
 	Name   string
 	simple bool
 	hw3ex2 bool
+	hw3ex3 bool
+	ackAll bool
 	Peers  []string
+	// Network information
+	n               uint64
+	stubbornTimeout uint64
+	hopLimit        uint32
 	// Channels used to communicate between threads
 	statusWaiting        sync.Map
 	expected             sync.Map
@@ -35,6 +38,7 @@ type Gossiper struct {
 	searchReply          chan *messages.SearchReply
 	searchRequestTimeout chan bool
 	searchFinished       chan bool
+	ackBlock             chan *messages.TLCAck
 	// Message history
 	msgHistory      sync.Map
 	allMessages     []*messages.GossipPacket // Used for the GUI
@@ -56,11 +60,14 @@ type Gossiper struct {
 	peerMutex        *sync.Mutex
 	idMutex          *sync.Mutex
 	destinationMutex *sync.Mutex
+	// TLC
+	myTime uint32
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
 // list of peers.
-func NewGossiper(address, name string, uiPort string, peers []string, simple bool, hw3ex2 bool) *Gossiper {
+func NewGossiper(address, name string, uiPort string, peers []string, n uint64,
+	stubbornTimeout uint64, hopLimit uint32, simple bool, hw3ex2 bool, hw3ex3 bool, ackAll bool) *Gossiper {
 	// Creation of all necessary UDP sockets.
 	udpAddr, err := net.ResolveUDPAddr("udp4", address)
 	tools.Check(err)
@@ -80,10 +87,16 @@ func NewGossiper(address, name string, uiPort string, peers []string, simple boo
 		Name:                 name,
 		simple:               simple,
 		hw3ex2:               hw3ex2,
+		hw3ex3:               hw3ex3,
+		ackAll:               ackAll,
+		n:                    n,
+		stubbornTimeout:      stubbornTimeout,
+		hopLimit:             hopLimit,
 		searchRequestLookup:  make(chan *messages.SearchRequest),
 		searchReply:          make(chan *messages.SearchReply),
 		searchRequestTimeout: make(chan bool),
 		searchFinished:       make(chan bool),
+		ackBlock:             make(chan *messages.TLCAck),
 		allMessages:          make([]*messages.GossipPacket, 0),
 		latestMessageID:      0,
 		vectorClock:          &messages.StatusPacket{Want: nil},
@@ -93,6 +106,7 @@ func NewGossiper(address, name string, uiPort string, peers []string, simple boo
 		peerMutex:            &sync.Mutex{},
 		idMutex:              &sync.Mutex{},
 		destinationMutex:     &sync.Mutex{},
+		myTime:               0,
 	}
 
 	// Create peers (and channels for inter-thread communications).

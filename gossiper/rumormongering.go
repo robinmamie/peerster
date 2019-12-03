@@ -9,7 +9,7 @@ import (
 )
 
 // receivedGossip handles any received gossiping message, new or not.
-func (gossiper *Gossiper) receivedGossip(g messages.Gossiping) {
+func (gossiper *Gossiper) receivedGossip(g messages.Gossiping, forceResend bool) {
 
 	gossipStatus := messages.PeerStatus{
 		Identifier: g.GetOrigin(),
@@ -17,8 +17,12 @@ func (gossiper *Gossiper) receivedGossip(g messages.Gossiping) {
 	}
 	_, present := gossiper.msgHistory.Load(gossipStatus)
 
+	if tlc, ok := g.(*messages.TLCMessage); ok {
+		gossiper.handleTLC(tlc)
+	}
+
 	// New gossiping message detected
-	if !present {
+	if !present || forceResend {
 		// Add message to history and update vector clock
 		gossiper.msgHistory.Store(gossipStatus, g)
 		gossiper.updateVectorClock(g, gossipStatus)
@@ -32,6 +36,32 @@ func (gossiper *Gossiper) receivedGossip(g messages.Gossiping) {
 		if rumor, ok := g.(*messages.RumorMessage); ok && rumor.Text != "" {
 			gossiper.allMessages = append(gossiper.allMessages, &messages.GossipPacket{Rumor: rumor})
 		}
+	}
+}
+
+func (gossiper *Gossiper) handleTLC(tlc *messages.TLCMessage) {
+	if tlc.Confirmed == -1 {
+		fmt.Println("UNCONFIRMED GOSSIP origin", tlc.Origin, "ID", tlc.ID,
+			"file name", tlc.TxBlock.Transaction.Name,
+			"size", tlc.TxBlock.Transaction.Size,
+			"metahash", tools.BytesToHexString(tlc.TxBlock.Transaction.MetafileHash))
+
+		if gossiper.Name != tlc.Origin {
+			ack := &messages.TLCAck{
+				Origin:      gossiper.Name,
+				ID:          tlc.ID,
+				Text:        "",
+				Destination: tlc.Origin,
+				HopLimit:    gossiper.hopLimit,
+			}
+			gossiper.handleAck(ack)
+			fmt.Println("SENDING ACK origin", tlc.Origin, "ID", tlc.ID)
+		}
+	} else {
+		fmt.Println("CONFIRMED GOSSIP origin", tlc.Origin, "ID", tlc.ID,
+			"file name", tlc.TxBlock.Transaction.Name,
+			"size", tlc.TxBlock.Transaction.Size,
+			"metahash", tools.BytesToHexString(tlc.TxBlock.Transaction.MetafileHash))
 	}
 }
 
