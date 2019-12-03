@@ -36,9 +36,9 @@ func (gossiper *Gossiper) listenGossiper() {
 			go gossiper.handleSearchRequest(packet.SearchRequest, address)
 		case packet.SearchReply != nil:
 			go gossiper.handleSearchReply(packet.SearchReply)
-		case packet.TLCMessage != nil:
+		case packet.TLCMessage != nil && gossiper.hw3ex2:
 			go gossiper.handleGossip(packet.TLCMessage, address)
-		case packet.Ack != nil:
+		case packet.Ack != nil && gossiper.hw3ex2:
 			go gossiper.handleAck(packet.Ack)
 		}
 	}
