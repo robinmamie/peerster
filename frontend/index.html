@@ -11,26 +11,38 @@
         <div id="peerster">
             <h1>Peerster</h1>
 
-            <b>Local name:</b>
-                <span class="nodeName"></span>
-                <br>
-            <b>Broadcast IP:</b>
-                <span class="nodeIP"></span>
-                <br>
-            <b>Client port:</b>
-                <span class="clientPort"></span>
-                <br><br>
+            <div class="header">
+                <div class="column inputs">
+                    <b>Local name:</b>
+                        <span class="nodeName"></span>
+                        <br>
+                    <b>Broadcast IP:</b>
+                        <span class="nodeIP"></span>
+                        <br>
+                    <b>Client port:</b>
+                        <span class="clientPort"></span>
+                        <br><br>
 
-            <b>Select file:</b>
-                <input id="file" type="file">
-                <button id="selectFile">Select</button>
-                <br><br>
-            <b>Download file:</b>
-                <input id="fileName" type="text" placeholder="Name">
-                <input id="fileHash" type="text" placeholder="Hash">
-                <input id="fileOrigin" type="text" placeholder="Origin">
-                <button id="downloadFile">Download</button>
-                <br>
+                    <b>Select file:</b>
+                        <input id="file" type="file">
+                        <button id="selectFile">Select</button>
+                        <br><br>
+                    <b>Download file:</b>
+                        <input id="fileName" type="text" placeholder="Name">
+                        <input id="fileHash" type="text" placeholder="Hash">
+                        <input id="fileOrigin" type="text" placeholder="Origin">
+                        <button id="downloadFile">Download</button>
+                        <br><br>
+                    <b>Keyword search:</b>
+                        <input id="keyword" type="text" placeholder="keyword1,keyword2">
+                        <br>
+                </div>
+                <div class="column files">
+                    <h3>Files</h3>
+
+                    <div class="fileList"></div>
+                </div>
+            </div>
             
             <div class="content">
                 <div class="column main">

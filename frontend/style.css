@@ -13,23 +13,23 @@ body {
     float: left;
 }
 
-.main {
+.main, .inputs {
     width: 70%;
     margin-right: 5px;
 }
 
-.side {
+.side, .files {
     width: 25%;
     margin-left: 5px;
 }
 
-.content:after {
+.content:after, .header:after {
     content: "";
     display: table;
     clear: both;
 }
 
-.messages, .nodeList, .privateList {
+.messages, .nodeList, .privateList, .fileList {
     overflow: scroll;
     background-color: aliceblue;
     border: 2px solid black;
@@ -39,7 +39,7 @@ body {
     height: 600px;
 }
 
-.nodeList {
+.nodeList, .fileList {
     height: 200px;
 }
 
