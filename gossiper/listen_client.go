@@ -2,6 +2,7 @@ package gossiper
 
 import (
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -102,6 +103,10 @@ func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
 		ID:        tlcID,
 		Confirmed: -1,
 		TxBlock:   bp,
+	}
+	if gossiper.hw3ex4 {
+		rand.Seed(time.Now().UTC().UnixNano())
+		tlc.Fitness = rand.Float32()
 	}
 	gossiper.receivedGossip(tlc, false)
 	acknowledgements := make(map[string]bool)

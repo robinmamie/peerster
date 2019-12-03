@@ -217,7 +217,13 @@ func (gossiper *Gossiper) roundCounting() {
 			} else {
 				roundConfirmed[round] = []*messages.TLCMessage{tlcConfirmed}
 			}
-			if len(roundConfirmed[round]) > (int)(gossiper.n)-len(roundConfirmed[round]) {
+			confirmed := 0
+			for _, r := range roundConfirmed[(int)(gossiper.myTime)] {
+				if r.Confirmed != -1 {
+					confirmed++
+				}
+			}
+			if confirmed > (int)(gossiper.n)-confirmed {
 				majorityConfirmedMessages = true
 			}
 		}
@@ -243,8 +249,10 @@ func (gossiper *Gossiper) formatConfirmedPairs(roundConfirmed []*messages.TLCMes
 	var pairs []string = nil
 	i := 1
 	for _, tlc := range roundConfirmed {
-		pairs = append(pairs, fmt.Sprintf("origin%d %s ID%d %d", i, tlc.Origin, i, tlc.ID))
-		i++
+		if tlc.Confirmed != -1 {
+			pairs = append(pairs, fmt.Sprintf("origin%d %s ID%d %d", i, tlc.Origin, i, tlc.ID))
+			i++
+		}
 	}
 
 	return strings.Join(pairs, ", ")
