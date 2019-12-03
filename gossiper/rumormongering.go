@@ -106,7 +106,24 @@ func (gossiper *Gossiper) validate(tlc *messages.TLCMessage) bool {
 			return false
 		}
 	}
-	
+	ok := true
+	var otherChain []string = nil
+	hashArray := tlc.TxBlock.Hash()
+	hash := tools.BytesToHexString(hashArray[:])
+	for ok {
+		prev, ok := gossiper.allBlocks.Load(hash)
+		if ok {
+			hashArray = prev.(*messages.TLCMessage).TxBlock.Hash()
+			hash = tools.BytesToHexString(hashArray[:])
+			otherChain = append(otherChain, hash)
+		}
+	}
+	for i, b := range gossiper.blockchain[1:] {
+		ourHash := tools.BytesToHexString(b.PrevHash[:])
+		if ourHash != otherChain[len(otherChain)-1-i] {
+			return false
+		}
+	}
 	return true
 }
 

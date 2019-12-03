@@ -74,6 +74,7 @@ type Gossiper struct {
 	canGossipWC            chan bool
 	// Blockchain
 	blockchain []messages.BlockPublish
+	allBlocks  sync.Map
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
@@ -208,6 +209,8 @@ func (gossiper *Gossiper) roundCounting() {
 			gossiper.gossipWC = true
 		case tlcConfirmed := <-gossiper.roundsUpdated:
 			roundRaw, _ := gossiper.rounds.Load(tlcConfirmed.Origin)
+			hash := tlcConfirmed.TxBlock.Hash()
+			gossiper.allBlocks.Store(tools.BytesToHexString(hash[:]), tlcConfirmed)
 			round := len(roundRaw.([]int)) - 1
 			if list, ok := roundConfirmed[round]; ok {
 				present := false
