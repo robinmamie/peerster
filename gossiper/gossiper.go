@@ -240,7 +240,7 @@ func (gossiper *Gossiper) roundCounting() {
 
 		// Point 3 of hw3ex3 algorithm
 		if gossiper.gossipWC && majorityConfirmedMessages {
-			if !gossiper.hw3ex4 || gossiper.myTime%3 == 0 {
+			if !gossiper.hw3ex4 || gossiper.myTime%3 == 2 {
 				best := roundConfirmed[(int)(gossiper.myTime)][0]
 				for _, conf := range roundConfirmed[(int)(gossiper.myTime)] {
 					if best.Fitness < conf.Fitness {
@@ -272,7 +272,7 @@ func (gossiper *Gossiper) roundCounting() {
 						"ID", id,
 						"file names", gossiper.getFileNames(),
 						"size", best.TxBlock.Transaction.Size,
-						"metahash", best.TxBlock.Transaction.MetafileHash)
+						"metahash", tools.BytesToHexString(best.TxBlock.Transaction.MetafileHash))
 					gossiper.bestBlock = nil
 				}
 				gossiper.gossipWC = false
@@ -281,7 +281,7 @@ func (gossiper *Gossiper) roundCounting() {
 				case gossiper.canGossipWC <- true:
 				case <-ticker.C:
 				}
-			} else {
+			} else if gossiper.hw3ex4 {
 				gossiper.bestBlock = roundConfirmed[(int)(gossiper.myTime)][0]
 				for _, conf := range roundConfirmed[(int)(gossiper.myTime)] {
 					if gossiper.bestBlock.Fitness < conf.Fitness {

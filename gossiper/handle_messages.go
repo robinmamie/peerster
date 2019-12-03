@@ -303,7 +303,6 @@ func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequ
 
 	var matchList []match = nil
 	for {
-		// TODO add timer to kill process when nothing comes back
 		select {
 		case reply := <-gossiper.searchReply:
 			for _, results := range reply.Results {
@@ -419,10 +418,8 @@ func (gossiper *Gossiper) processSearch(request *messages.SearchRequest) {
 		gossiper.indexedFiles.Range(func(key interface{}, value interface{}) bool {
 			name := value.(*files.FileMetadata).FileName
 			match, _ := regexp.MatchString(regex, name)
-			// TODO handle error
 			if match {
 				hash, _ := hex.DecodeString(key.(string))
-				// TODO handle error
 				results = append(results, &messages.SearchResult{
 					FileName:     name,
 					MetafileHash: hash,
@@ -451,7 +448,6 @@ func (gossiper *Gossiper) processSearch(request *messages.SearchRequest) {
 func (gossiper *Gossiper) getChunkMap(metaHash []byte) ([]uint64, uint64) {
 	metadata, _ := gossiper.indexedFiles.Load(tools.BytesToHexString(metaHash))
 	metaFile := metadata.(*files.FileMetadata).MetaFile
-	// TODO check error
 	chunkNumber := len(metaFile) / files.SHA256ByteSize
 	var chunkMap []uint64 = nil
 	for i := 1; i <= chunkNumber; i++ {

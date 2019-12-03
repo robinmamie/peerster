@@ -108,22 +108,26 @@ func (gossiper *Gossiper) validate(tlc *messages.TLCMessage) bool {
 		}
 	}
 	// 2nd criteria
-	ok := true
-	var otherChain []string = nil
-	hashArray := tlc.TxBlock.Hash()
-	hash := tools.BytesToHexString(hashArray[:])
-	for ok {
-		prev, ok := gossiper.allBlocks.Load(hash)
-		if ok {
-			hashArray = prev.(*messages.TLCMessage).TxBlock.Hash()
-			hash = tools.BytesToHexString(hashArray[:])
-			otherChain = append(otherChain, hash)
+	if len(gossiper.blockchain) > 0 {
+		ok := true
+		var otherChain []string = nil
+		var prev interface{}
+		hashArray := tlc.TxBlock.Hash()
+		hash := tools.BytesToHexString(hashArray[:])
+		for ok {
+			prev, ok = gossiper.allBlocks.Load(hash)
+			fmt.Println(prev, ok)
+			if ok {
+				hashArray := prev.(*messages.TLCMessage).TxBlock.PrevHash
+				hash = tools.BytesToHexString(hashArray[:])
+				otherChain = append(otherChain, hash)
+			}
 		}
-	}
-	for i, b := range gossiper.blockchain[1:] {
-		ourHash := tools.BytesToHexString(b.PrevHash[:])
-		if ourHash != otherChain[len(otherChain)-1-i] {
-			return false
+		for i, b := range gossiper.blockchain[1:] {
+			ourHash := tools.BytesToHexString(b.PrevHash[:])
+			if ourHash != otherChain[len(otherChain)-1-i] {
+				return false
+			}
 		}
 	}
 	return true
@@ -315,9 +319,11 @@ func (gossiper *Gossiper) rumormongerPastMsg(origin string, id uint32, target st
 		NextID:     id,
 	}
 
-	oldGossipRaw, _ := gossiper.msgHistory.Load(ps)
-	oldGossip := oldGossipRaw.(messages.Gossiping)
-	gossiper.rumormonger(oldGossip, target)
+	oldGossipRaw, ok := gossiper.msgHistory.Load(ps)
+	if ok {
+		oldGossip := oldGossipRaw.(messages.Gossiping)
+		gossiper.rumormonger(oldGossip, target)
+	}
 }
 
 // sendCurrentStatus sends the current vector clock as a GossipPacket to the
