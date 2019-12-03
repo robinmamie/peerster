@@ -84,6 +84,9 @@ func (gossiper *Gossiper) handleStatus(status *messages.StatusPacket, address st
 func (gossiper *Gossiper) handlePrivate(private *messages.PrivateMessage) {
 	if gossiper.ptpMessageReachedDestination(private) {
 		gossiper.allMessages = append(gossiper.allMessages, &messages.GossipPacket{Private: private})
+		fmt.Println("PRIVATE origin", private.Origin,
+			"hop-limit", private.HopLimit,
+			"contents", private.Text)
 	}
 }
 

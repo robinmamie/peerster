@@ -106,6 +106,7 @@ func (gossiper *Gossiper) validate(tlc *messages.TLCMessage) bool {
 			return false
 		}
 	}
+	
 	return true
 }
 
@@ -169,12 +170,14 @@ func (gossiper *Gossiper) updateVectorClock(g messages.Gossiping, status message
 					_, stillPresent = gossiper.msgHistory.Load(status)
 				}
 				// Signal update
-				update := true
-				for update {
-					select {
-					case gossiper.vectorUpdate <- true:
-					default:
-						update = false
+				if gossiper.hw3ex3 {
+					update := true
+					for update {
+						select {
+						case gossiper.vectorUpdate <- true:
+						default:
+							update = false
+						}
 					}
 				}
 			}
@@ -197,12 +200,14 @@ func (gossiper *Gossiper) updateVectorClock(g messages.Gossiping, status message
 	gossiper.updateMutex.Unlock()
 
 	// Signal update
-	update := true
-	for update {
-		select {
-		case gossiper.vectorUpdate <- true:
-		default:
-			update = false
+	if gossiper.hw3ex3 {
+		update := true
+		for update {
+			select {
+			case gossiper.vectorUpdate <- true:
+			default:
+				update = false
+			}
 		}
 	}
 }

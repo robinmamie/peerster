@@ -52,5 +52,6 @@ func (gossiper *Gossiper) isSenderAbsent(address string) bool {
 			return false
 		}
 	}
+	
 	return true
 }

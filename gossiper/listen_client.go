@@ -65,6 +65,16 @@ func (gossiper *Gossiper) createRequest(message *messages.Message) {
 
 // indexFile indexes a local file and saves all its chunks.
 func (gossiper *Gossiper) indexFile(fileName string) {
+
+	// Ignore requests which have already reached consensus
+	if gossiper.hw3ex4 {
+		for _, b := range gossiper.blockchain {
+			if b.Transaction.Name == fileName {
+				return
+			}
+		}
+	}
+
 	fileMetaData, chunks := files.NewFileMetadata(fileName)
 	gossiper.indexedFiles.Store(tools.BytesToHexString(fileMetaData.MetaHash), fileMetaData)
 
@@ -77,7 +87,6 @@ func (gossiper *Gossiper) indexFile(fileName string) {
 			gossiper.fileChunks.Store(hexChunkHash, chunks[chunkNumber-1])
 		}
 	}
-
 	if gossiper.hw3ex2 {
 		if gossiper.hw3ex3 {
 			if gossiper.gossipWC {
@@ -163,6 +172,8 @@ func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
 
 // createPrivate creates a PrivateMessage and forwards it.
 func (gossiper *Gossiper) createPrivate(message *messages.Message) {
+	fmt.Println("CLIENT MESSAGE", message.Text,
+		"dest", *message.Destination)
 	private := &messages.PrivateMessage{
 		Origin:      gossiper.Name,
 		ID:          0, // No need to count
