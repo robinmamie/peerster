@@ -78,6 +78,12 @@ func (gossiper *Gossiper) indexFile(fileName string) {
 	}
 
 	if gossiper.hw3ex2 {
+		if gossiper.hw3ex3 {
+			if gossiper.gossipWC {
+				<-gossiper.canGossipWC
+			}
+			gossiper.gossipWithConfirmation <- true
+		}
 		gossiper.publish(fileMetaData)
 	}
 }
@@ -119,11 +125,13 @@ func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
 		}
 		select {
 		case <-ticker.C:
-			gossiper.receivedGossip(tlc, true)
+			go gossiper.receivedGossip(tlc, true)
 		case ack := <-gossiper.ackBlock:
 			if ack.ID == tlcID {
 				acknowledgements[ack.Origin] = true
 			}
+		case <-gossiper.canGossipWC:
+			return
 		}
 	}
 }

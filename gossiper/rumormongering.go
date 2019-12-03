@@ -18,7 +18,7 @@ func (gossiper *Gossiper) receivedGossip(g messages.Gossiping, forceResend bool)
 	_, present := gossiper.msgHistory.Load(gossipStatus)
 
 	if tlc, ok := g.(*messages.TLCMessage); ok {
-		gossiper.handleTLC(tlc)
+		go gossiper.handleTLC(tlc, present)
 	}
 
 	// New gossiping message detected
@@ -39,14 +39,30 @@ func (gossiper *Gossiper) receivedGossip(g messages.Gossiping, forceResend bool)
 	}
 }
 
-func (gossiper *Gossiper) handleTLC(tlc *messages.TLCMessage) {
+func (gossiper *Gossiper) handleTLC(tlc *messages.TLCMessage, present bool) {
+
 	if tlc.Confirmed == -1 {
+		// Track UNconfirmed messages for the round number
+		if !present {
+			if roundRaw, ok := gossiper.rounds.Load(tlc.Origin); ok {
+				round := roundRaw.(int)
+				gossiper.rounds.Store(tlc.Origin, round+1)
+			} else {
+				gossiper.rounds.Store(tlc.Origin, 0)
+			}
+		}
+
 		fmt.Println("UNCONFIRMED GOSSIP origin", tlc.Origin, "ID", tlc.ID,
 			"file name", tlc.TxBlock.Transaction.Name,
 			"size", tlc.TxBlock.Transaction.Size,
 			"metahash", tools.BytesToHexString(tlc.TxBlock.Transaction.MetafileHash))
 
-		if gossiper.Name != tlc.Origin {
+		// Only acknowledge messages if they are from now or the future
+		theirTime := 0
+		if round, ok := gossiper.rounds.Load(tlc.Origin); ok {
+			theirTime = round.(int)
+		}
+		if gossiper.Name != tlc.Origin && (theirTime >= (int)(gossiper.myTime) || gossiper.ackAll) {
 			ack := &messages.TLCAck{
 				Origin:      gossiper.Name,
 				ID:          tlc.ID,
@@ -62,6 +78,7 @@ func (gossiper *Gossiper) handleTLC(tlc *messages.TLCMessage) {
 			"file name", tlc.TxBlock.Transaction.Name,
 			"size", tlc.TxBlock.Transaction.Size,
 			"metahash", tools.BytesToHexString(tlc.TxBlock.Transaction.MetafileHash))
+		gossiper.roundsUpdated <- tlc
 	}
 }
 

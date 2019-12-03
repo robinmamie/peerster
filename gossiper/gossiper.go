@@ -1,9 +1,12 @@
 package gossiper
 
 import (
+	"fmt"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/robinmamie/Peerster/messages"
 	"github.com/robinmamie/Peerster/tools"
@@ -61,7 +64,12 @@ type Gossiper struct {
 	idMutex          *sync.Mutex
 	destinationMutex *sync.Mutex
 	// TLC
-	myTime uint32
+	myTime                 uint32
+	gossipWithConfirmation chan bool
+	rounds                 sync.Map
+	roundsUpdated          chan *messages.TLCMessage
+	gossipWC               bool
+	canGossipWC            chan bool
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
@@ -80,33 +88,37 @@ func NewGossiper(address, name string, uiPort string, peers []string, n uint64,
 	tools.Check(err)
 
 	gossiper := &Gossiper{
-		Address:              address,
-		conn:                 udpConn,
-		cliConn:              cliConn,
-		UIPort:               uiPort,
-		Name:                 name,
-		simple:               simple,
-		hw3ex2:               hw3ex2,
-		hw3ex3:               hw3ex3,
-		ackAll:               ackAll,
-		n:                    n,
-		stubbornTimeout:      stubbornTimeout,
-		hopLimit:             hopLimit,
-		searchRequestLookup:  make(chan *messages.SearchRequest),
-		searchReply:          make(chan *messages.SearchReply),
-		searchRequestTimeout: make(chan bool),
-		searchFinished:       make(chan bool),
-		ackBlock:             make(chan *messages.TLCAck),
-		allMessages:          make([]*messages.GossipPacket, 0),
-		latestMessageID:      0,
-		vectorClock:          &messages.StatusPacket{Want: nil},
-		ownID:                1,
-		destinationList:      make([]string, 0),
-		updateMutex:          &sync.Mutex{},
-		peerMutex:            &sync.Mutex{},
-		idMutex:              &sync.Mutex{},
-		destinationMutex:     &sync.Mutex{},
-		myTime:               0,
+		Address:                address,
+		conn:                   udpConn,
+		cliConn:                cliConn,
+		UIPort:                 uiPort,
+		Name:                   name,
+		simple:                 simple,
+		hw3ex2:                 hw3ex2,
+		hw3ex3:                 hw3ex3,
+		ackAll:                 ackAll,
+		n:                      n,
+		stubbornTimeout:        stubbornTimeout,
+		hopLimit:               hopLimit,
+		searchRequestLookup:    make(chan *messages.SearchRequest),
+		searchReply:            make(chan *messages.SearchReply),
+		searchRequestTimeout:   make(chan bool),
+		searchFinished:         make(chan bool),
+		ackBlock:               make(chan *messages.TLCAck),
+		allMessages:            make([]*messages.GossipPacket, 0),
+		latestMessageID:        0,
+		vectorClock:            &messages.StatusPacket{Want: nil},
+		ownID:                  1,
+		destinationList:        make([]string, 0),
+		updateMutex:            &sync.Mutex{},
+		peerMutex:              &sync.Mutex{},
+		idMutex:                &sync.Mutex{},
+		destinationMutex:       &sync.Mutex{},
+		myTime:                 0,
+		gossipWithConfirmation: make(chan bool),
+		roundsUpdated:          make(chan *messages.TLCMessage),
+		gossipWC:               false,
+		canGossipWC:            make(chan bool),
 	}
 
 	// Create peers (and channels for inter-thread communications).
@@ -126,6 +138,9 @@ func (gossiper *Gossiper) Run(antiEntropyDelay uint64, rtimer uint64) {
 		}
 		if rtimer > 0 {
 			go gossiper.routeRumor(rtimer)
+		}
+		if gossiper.hw3ex3 {
+			go gossiper.roundCounting()
 		}
 	}
 
@@ -174,4 +189,52 @@ func (gossiper *Gossiper) getRandomPeerList(sender string) []string {
 		}
 	}
 	return randomPeerList
+}
+
+func (gossiper *Gossiper) roundCounting() {
+	majorityConfirmedMessages := false
+	roundConfirmed := make(map[int][]*messages.TLCMessage)
+	for {
+		select {
+		case <-gossiper.gossipWithConfirmation:
+			gossiper.gossipWC = true
+		case tlcConfirmed := <-gossiper.roundsUpdated:
+			roundRaw, _ := gossiper.rounds.Load(tlcConfirmed.Origin)
+			round := roundRaw.(int)
+			if list, ok := roundConfirmed[round]; ok {
+				roundConfirmed[round] = append(list, tlcConfirmed)
+			} else {
+				roundConfirmed[round] = []*messages.TLCMessage{tlcConfirmed}
+			}
+			if len(roundConfirmed[round]) > (int)(gossiper.n)-len(roundConfirmed[round]) {
+				majorityConfirmedMessages = true
+			}
+		}
+
+		// Point 3 of hw3ex3 algorithm
+		if gossiper.gossipWC && majorityConfirmedMessages {
+			confPairs := gossiper.formatConfirmedPairs(roundConfirmed[(int)(gossiper.myTime)])
+			gossiper.myTime++
+			fmt.Println("ADVANCING TO round", gossiper.myTime,
+				"BASED ON CONFIRMED MESSAGES", confPairs)
+			gossiper.gossipWC = false
+			ticker := time.NewTicker(time.Millisecond)
+			select {
+			case gossiper.canGossipWC <- true:
+			case <-ticker.C:
+			}
+			majorityConfirmedMessages = false
+		}
+	}
+}
+
+func (gossiper *Gossiper) formatConfirmedPairs(roundConfirmed []*messages.TLCMessage) string {
+	var pairs []string = nil
+	i := 1
+	for _, tlc := range roundConfirmed {
+		pairs = append(pairs, fmt.Sprintf("origin%d %s ID%d %d", i, tlc.Origin, i, tlc.ID))
+		i++
+	}
+
+	return strings.Join(pairs, ", ")
 }
