@@ -63,7 +63,7 @@ func main() {
 	os.Mkdir("_SharedFiles", 0755)
 
 	gossiper := gossiper.NewGossiper(gossipAddr, name, uiPort, peers, n, stubbornTimeout,
-		(uint32)(hopLimit), simple, hw3ex2, hw3ex3, ackall)
+		(uint32)(hopLimit), simple, hw3ex2, hw3ex3, ackAll)
 
 	go web.InitWebServer(gossiper, uiPort)
 	gossiper.Run(antiEntropy, rtimer)
