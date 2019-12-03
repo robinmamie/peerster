@@ -94,14 +94,18 @@ func (gossiper *Gossiper) indexFile(fileName string) {
 			}
 			gossiper.gossipWithConfirmation <- true
 		}
-		gossiper.publish(fileMetaData)
+		gossiper.publish(fileMetaData, -1.0)
 	}
 }
 
-func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
+func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata, fit float32) {
 	var previousHash [32]byte
 	if len(gossiper.blockchain) > 0 && gossiper.hw3ex4 {
-		previousHash = gossiper.blockchain[len(gossiper.blockchain)-1].Hash()
+		if gossiper.bestBlock == nil {
+			previousHash = gossiper.blockchain[len(gossiper.blockchain)-1].Hash()
+		} else {
+			previousHash = gossiper.bestBlock.TxBlock.Hash()
+		}
 	}
 	bp := messages.BlockPublish{
 		Transaction: messages.TxPublish{
@@ -126,9 +130,17 @@ func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
 		tlc.VectorClock = vc
 	}
 	if gossiper.hw3ex4 {
-		rand.Seed(time.Now().UTC().UnixNano())
-		tlc.Fitness = rand.Float32()
+		if fit < 0.0 {
+			rand.Seed(time.Now().UTC().UnixNano())
+			tlc.Fitness = rand.Float32()
+		} else {
+			tlc.Fitness = fit
+		}
 	}
+	gossiper.tlcWatchdog(tlc)
+}
+
+func (gossiper *Gossiper) tlcWatchdog(tlc *messages.TLCMessage) {
 	gossiper.receivedGossip(tlc, false)
 	acknowledgements := make(map[string]bool)
 	acknowledgements[gossiper.Name] = true
@@ -161,7 +173,7 @@ func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
 		case <-ticker.C:
 			go gossiper.receivedGossip(tlc, true)
 		case ack := <-gossiper.ackBlock:
-			if ack.ID == tlcID {
+			if ack.ID == tlc.ID {
 				acknowledgements[ack.Origin] = true
 			}
 		case <-gossiper.canGossipWC:

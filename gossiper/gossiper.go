@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/robinmamie/Peerster/files"
 	"github.com/robinmamie/Peerster/messages"
 	"github.com/robinmamie/Peerster/tools"
 )
@@ -75,6 +76,7 @@ type Gossiper struct {
 	// Blockchain
 	blockchain []messages.BlockPublish
 	allBlocks  sync.Map
+	bestBlock  *messages.TLCMessage
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
@@ -238,21 +240,76 @@ func (gossiper *Gossiper) roundCounting() {
 
 		// Point 3 of hw3ex3 algorithm
 		if gossiper.gossipWC && majorityConfirmedMessages {
-			confPairs := gossiper.formatConfirmedPairs(roundConfirmed[(int)(gossiper.myTime)])
-			gossiper.myTime++
-			fmt.Println("ADVANCING TO round", gossiper.myTime,
-				"BASED ON CONFIRMED MESSAGES", confPairs)
-			gossiper.gossipWC = false
 			if !gossiper.hw3ex4 || gossiper.myTime%3 == 0 {
+				best := roundConfirmed[(int)(gossiper.myTime)][0]
+				for _, conf := range roundConfirmed[(int)(gossiper.myTime)] {
+					if best.Fitness < conf.Fitness {
+						best = conf
+					}
+				}
+				round1 := false
+				origin := ""
+				id := (uint32)(0)
+				for _, conf := range roundConfirmed[(int)(gossiper.myTime)-2] {
+					if conf.TxBlock.Transaction.Equals(best.TxBlock.Transaction) {
+						round1 = true
+						origin = conf.Origin
+						id = conf.ID
+						break
+					}
+				}
+				round2 := false
+				for _, conf := range roundConfirmed[(int)(gossiper.myTime)-1] {
+					if conf.TxBlock.Transaction.Equals(best.TxBlock.Transaction) {
+						round2 = true
+						break
+					}
+				}
+				if round1 && round2 {
+					gossiper.blockchain = append(gossiper.blockchain, best.TxBlock)
+					fmt.Println("CONSENSUS ON QSC round", gossiper.myTime,
+						"message origin", origin,
+						"ID", id,
+						"file names", gossiper.getFileNames(),
+						"size", best.TxBlock.Transaction.Size,
+						"metahash", best.TxBlock.Transaction.MetafileHash)
+					gossiper.bestBlock = nil
+				}
+				gossiper.gossipWC = false
 				ticker := time.NewTicker(time.Millisecond)
 				select {
 				case gossiper.canGossipWC <- true:
 				case <-ticker.C:
 				}
+			} else {
+				gossiper.bestBlock = roundConfirmed[(int)(gossiper.myTime)][0]
+				for _, conf := range roundConfirmed[(int)(gossiper.myTime)] {
+					if gossiper.bestBlock.Fitness < conf.Fitness {
+						gossiper.bestBlock = conf
+					}
+				}
+				go gossiper.publish(&files.FileMetadata{
+					FileName: gossiper.bestBlock.TxBlock.Transaction.Name,
+					FileSize: gossiper.bestBlock.TxBlock.Transaction.Size,
+					MetaHash: gossiper.bestBlock.TxBlock.Transaction.MetafileHash,
+				}, gossiper.bestBlock.Fitness)
 			}
 			majorityConfirmedMessages = false
+
+			confPairs := gossiper.formatConfirmedPairs(roundConfirmed[(int)(gossiper.myTime)])
+			gossiper.myTime++
+			fmt.Println("ADVANCING TO round", gossiper.myTime,
+				"BASED ON CONFIRMED MESSAGES", confPairs)
 		}
 	}
+}
+
+func (gossiper *Gossiper) getFileNames() string {
+	var names []string = nil
+	for _, n := range gossiper.blockchain {
+		names = append(names, n.Transaction.Name)
+	}
+	return strings.Join(names, " ")
 }
 
 func (gossiper *Gossiper) formatConfirmedPairs(roundConfirmed []*messages.TLCMessage) string {

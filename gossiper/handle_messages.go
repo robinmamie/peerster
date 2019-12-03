@@ -23,26 +23,13 @@ func (gossiper *Gossiper) handleSimple(simple *messages.SimpleMessage) {
 }
 
 // handleRumor begins the rumormongering logic when we get a rumor message.
-func (gossiper *Gossiper) handleGossip(g messages.Gossiping, address string) {
-	gossiper.updateRoutingTable(g, address)
-	if rumor, ok := g.(*messages.RumorMessage); ok {
-		fmt.Println("RUMOR origin", rumor.Origin, "from",
-			address, "ID", rumor.ID, "contents",
-			rumor.Text)
-		gossiper.receivedGossip(g, false)
-		gossiper.sendCurrentStatus(address)
-	} else if tlc, ok := g.(*messages.TLCMessage); ok {
-		for {
-			if tlc.VectorClock.IsIncludedIn(gossiper.vectorClock) {
-				go gossiper.receivedGossip(tlc, false)
-				gossiper.sendCurrentStatus(address)
-				return
-			}
-			select {
-			case <-gossiper.vectorUpdate:
-			}
-		}
-	}
+func (gossiper *Gossiper) handleRumor(rumor *messages.RumorMessage, address string) {
+	gossiper.updateRoutingTable(rumor, address)
+	fmt.Println("RUMOR origin", rumor.Origin, "from",
+		address, "ID", rumor.ID, "contents",
+		rumor.Text)
+	gossiper.receivedGossip(rumor, false)
+	gossiper.sendCurrentStatus(address)
 }
 
 // handleStatus communicates with other threads, or handles the status as an
@@ -508,6 +495,19 @@ func (gossiper *Gossiper) handleSearchReply(reply *messages.SearchReply) {
 			default:
 				return
 			}
+		}
+	}
+}
+
+func (gossiper *Gossiper) handleTLCMessage(tlc *messages.TLCMessage, address string) {
+	for {
+		if tlc.VectorClock.IsIncludedIn(gossiper.vectorClock) {
+			go gossiper.receivedGossip(tlc, false)
+			gossiper.sendCurrentStatus(address)
+			return
+		}
+		select {
+		case <-gossiper.vectorUpdate:
 		}
 	}
 }

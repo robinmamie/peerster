@@ -101,11 +101,13 @@ func (gossiper *Gossiper) handleTLC(tlc *messages.TLCMessage, present bool) {
 }
 
 func (gossiper *Gossiper) validate(tlc *messages.TLCMessage) bool {
+	// 1st criteria
 	for _, b := range gossiper.blockchain {
 		if b.Transaction.Name == tlc.TxBlock.Transaction.Name {
 			return false
 		}
 	}
+	// 2nd criteria
 	ok := true
 	var otherChain []string = nil
 	hashArray := tlc.TxBlock.Hash()

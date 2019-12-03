@@ -3,6 +3,8 @@ package messages
 import (
 	"crypto/sha256"
 	"encoding/binary"
+
+	"github.com/robinmamie/Peerster/tools"
 )
 
 // TxPublish represents a transaction to be published.
@@ -10,6 +12,13 @@ type TxPublish struct {
 	Name         string
 	Size         int64
 	MetafileHash []byte
+}
+
+// Equals tests the equality of 2 TxPublish
+func (t TxPublish) Equals(that TxPublish) bool {
+	return t.Name == that.Name &&
+		t.Size == that.Size &&
+		tools.BytesToHexString(t.MetafileHash) == tools.BytesToHexString(that.MetafileHash)
 }
 
 // BlockPublish represents a publication on the blockchain.
