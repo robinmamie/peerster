@@ -49,3 +49,13 @@ func (gossiper *Gossiper) GetDestinationsList() []string {
 	gossiper.latestDestinationID = len(gossiper.destinationList)
 	return gossiper.destinationList
 }
+
+// GetFileNames returns all known file names.
+func (gossiper *Gossiper) GetFileNames() []string {
+	var names []string = nil
+	gossiper.fileDestinations.Range(func(k interface{}, v interface{}) bool {
+		names = append(names, k.(string))
+		return true
+	})
+	return names
+}

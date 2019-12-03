@@ -31,6 +31,8 @@ func InitWebServer(g *gossiper.Gossiper, uiPort string) {
 	http.HandleFunc("/destinations", destinationHandler)
 	http.HandleFunc("/fulldestinations", fullDestinationHandler)
 	http.HandleFunc("/file", fileHandler)
+	http.HandleFunc("/search", searchHandler)
+	http.HandleFunc("/download", downloadHandler)
 	guiPort := 8080
 	for {
 		serverAddress := ":" + strconv.Itoa(guiPort)
@@ -197,6 +199,66 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 			tools.Check(err)
 			packet.Request = &hashBytes
 		}
+		packetBytes, err := protobuf.Encode(&packet)
+		tools.Check(err)
+
+		conn.Write(packetBytes)
+		conn.Close()
+	}
+}
+
+func parseFileList(destinations []string) []string {
+	var destList []string
+	for _, d := range destinations {
+		dest := "<p id=\"fileDown\" onclick=\"download(this)\">" + d + "</p>"
+		destList = append(destList, dest)
+	}
+	return destList
+}
+
+func searchHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		fileList := gossip.GetFileNames()
+		destinations := parseFileList(fileList)
+		peersJSON, err := json.Marshal(destinations)
+		tools.Check(err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(peersJSON)
+	case "POST":
+		err := r.ParseForm()
+		tools.Check(err)
+		conn, err := net.Dial("udp4", localAddress)
+		tools.Check(err)
+		// Keywords split in JS
+		kwd := r.PostForm["keywords"]
+		packet := messages.Message{
+			Keywords: &kwd,
+		}
+
+		packetBytes, err := protobuf.Encode(&packet)
+		tools.Check(err)
+
+		conn.Write(packetBytes)
+		conn.Close()
+	}
+}
+
+func downloadHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		err := r.ParseForm()
+		tools.Check(err)
+		conn, err := net.Dial("udp4", localAddress)
+		tools.Check(err)
+
+		file := r.PostForm["file"][0]
+		packet := messages.Message{
+			File: &file,
+		}
+
 		packetBytes, err := protobuf.Encode(&packet)
 		tools.Check(err)
 
