@@ -74,7 +74,9 @@ func (gossiper *Gossiper) handleTLC(tlc *messages.TLCMessage, present bool) {
 		if round, ok := gossiper.rounds.Load(tlc.Origin); ok {
 			theirTime = len(round.([]int)) - 1
 		}
-		if gossiper.Name != tlc.Origin && (theirTime >= (int)(gossiper.myTime) || gossiper.ackAll) {
+		if gossiper.Name != tlc.Origin &&
+			(!gossiper.hw3ex3 || theirTime >= (int)(gossiper.myTime) || gossiper.ackAll) &&
+			(!gossiper.hw3ex4 || gossiper.validate(tlc)) {
 			ack := &messages.TLCAck{
 				Origin:      gossiper.Name,
 				ID:          tlc.ID,
@@ -96,6 +98,15 @@ func (gossiper *Gossiper) handleTLC(tlc *messages.TLCMessage, present bool) {
 			}
 		}
 	}
+}
+
+func (gossiper *Gossiper) validate(tlc *messages.TLCMessage) bool {
+	for _, b := range gossiper.blockchain {
+		if b.Transaction.Name == tlc.TxBlock.Transaction.Name {
+			return false
+		}
+	}
+	return true
 }
 
 // rumormonger handles the main logic of the rumormongering protocol. Always

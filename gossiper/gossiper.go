@@ -72,6 +72,8 @@ type Gossiper struct {
 	roundsUpdated          chan *messages.TLCMessage
 	gossipWC               bool
 	canGossipWC            chan bool
+	// Blockchain
+	blockchain []messages.BlockPublish
 }
 
 // NewGossiper creates a Gossiper with a given address, name, port, mode and
@@ -123,6 +125,7 @@ func NewGossiper(address, name string, uiPort string, peers []string, n uint64,
 		roundsUpdated:          make(chan *messages.TLCMessage),
 		gossipWC:               false,
 		canGossipWC:            make(chan bool),
+		blockchain:             make([]messages.BlockPublish, 0),
 	}
 
 	// Create peers (and channels for inter-thread communications).

@@ -90,12 +90,17 @@ func (gossiper *Gossiper) indexFile(fileName string) {
 }
 
 func (gossiper *Gossiper) publish(fileMetaData *files.FileMetadata) {
+	var previousHash [32]byte
+	if len(gossiper.blockchain) > 0 && gossiper.hw3ex4 {
+		previousHash = gossiper.blockchain[len(gossiper.blockchain)-1].Hash()
+	}
 	bp := messages.BlockPublish{
 		Transaction: messages.TxPublish{
 			Name:         fileMetaData.FileName,
 			Size:         fileMetaData.FileSize,
 			MetafileHash: fileMetaData.MetaHash,
 		},
+		PrevHash: previousHash,
 	}
 	vc := &messages.StatusPacket{
 		Want: make([]messages.PeerStatus, len(gossiper.vectorClock.Want)),
