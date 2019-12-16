@@ -61,6 +61,7 @@ type Gossiper struct {
 	indexedFiles     sync.Map
 	fileChunks       sync.Map
 	fileDestinations sync.Map
+	FileHashes       sync.Map
 	// Lock used to synchronize writing on the vector clock and the history
 	updateMutex      *sync.Mutex
 	peerMutex        *sync.Mutex

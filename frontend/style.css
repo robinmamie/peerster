@@ -59,7 +59,7 @@ body {
     margin-right: 10px;
 }
 
-p#msg, p#node, p#private {
+p#msg, p#node, p#private, p#fileDown {
     margin-left: 5px;
     margin-top: 5px;
     margin-bottom: 5px;

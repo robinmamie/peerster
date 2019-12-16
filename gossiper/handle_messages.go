@@ -330,6 +330,7 @@ func (gossiper *Gossiper) handleClientSearchRequest(request *messages.SearchRequ
 							Origin: reply.Origin,
 						})
 						gossiper.fileDestinations.Store(hexMetaHash, reply.Origin)
+						gossiper.FileHashes.Store(results.FileName, hexMetaHash)
 					}
 				}
 			}

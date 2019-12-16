@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"github.com/robinmamie/Peerster/messages"
@@ -221,6 +222,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		fileList := gossip.GetFileNames()
 		destinations := parseFileList(fileList)
+		sort.Strings(destinations)
 		peersJSON, err := json.Marshal(destinations)
 		tools.Check(err)
 
@@ -233,7 +235,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 		conn, err := net.Dial("udp4", localAddress)
 		tools.Check(err)
 		// Keywords split in JS
-		kwd := r.PostForm["keywords"]
+		kwd := r.PostForm["keywords[]"]
 		packet := messages.Message{
 			Keywords: &kwd,
 		}
@@ -253,10 +255,12 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 		tools.Check(err)
 		conn, err := net.Dial("udp4", localAddress)
 		tools.Check(err)
-
 		file := r.PostForm["file"][0]
+		hash, _ := gossip.FileHashes.Load(file)
+		request, _ := hex.DecodeString(hash.(string))
 		packet := messages.Message{
-			File: &file,
+			File:    &file,
+			Request: &request,
 		}
 
 		packetBytes, err := protobuf.Encode(&packet)

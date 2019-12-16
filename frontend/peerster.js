@@ -15,6 +15,10 @@ $(document).ready(function() {
         sendMessage()
     })
 
+    $("#searchFile").click(function() {
+        searchFile()
+    })
+
     $("#messageInput").keypress(function (e) {
         if (e.which == '13') {
             sendMessage()
@@ -36,6 +40,10 @@ function sendMessage() {
     sendMessage(null, null)
 }
 
+function download(file) {
+    const fileName = file.innerHTML
+    $.post("/download", {file: fileName})
+}
 
 function displayPrivate(destination) {
     dest = destination.innerHTML
@@ -72,6 +80,15 @@ function downloadFile() {
     $.post("/file", {file: name, hash: hash, origin: origin})
 }
 
+function searchFile() {
+    const tags = $('#keyword').val()
+    if (tags === "") {
+        return
+    }
+    const keywords = tags.split(',')
+    $.post("/search", {keywords: keywords})
+}
+
 function saveNode() {
     const node = $('#nodeInput').val()
     if (node === "") {
@@ -101,6 +118,14 @@ function getAllMessages() {
             }
         }
     });
+
+    $.get("/search", function(files){
+        if (files !== null) {
+            for (let el of files) {
+                $(".fileList").append(el)
+            }
+        }
+    })
 }
 
 function update() {
@@ -142,6 +167,15 @@ function update() {
             }
         }
     });
+
+    $.get("/search", function(files){
+        $(".fileList").text("")
+        if (files !== null) {
+            for (let el of files) {
+                $(".fileList").append(el)
+            }
+        }
+    })
 }
 
 function beep() {
